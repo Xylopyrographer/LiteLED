@@ -20,7 +20,6 @@ show		KEYWORD2
 setPixel	KEYWORD2
 setPixels	KEYWORD2
 clear		KEYWORD2
-setPixel	KEYWORD2
 brightness	KEYWORD2
 
  
