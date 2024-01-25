@@ -94,5 +94,15 @@ esp_err_t LiteLED::brightness( uint8_t bright, bool show ) {
         return ESP_OK;
 }
 
+rgb_t LiteLED::getPixel( size_t num ) {
+    rgb_t _res = led_strip_get_pixel( &theStrip, num );
+    return _res;
+}
+
+crgb_t LiteLED::getPixelC( size_t num ) {
+    crgb_t _res = rgb_to_code( led_strip_get_pixel( &theStrip, num ) );
+    return _res;
+}
+
 
 //  --- EOF ---

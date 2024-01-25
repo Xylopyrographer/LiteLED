@@ -14,7 +14,7 @@
 #include <driver/rmt.h>
 #include "llrgb.h"
 
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 1) || ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL( 4, 4, 1 ) || ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL( 5, 0, 0 )
     #error "LiteLED requires arduino-esp32 core version to be at least 2.0.3 but less than 3.0.0."
 #endif
 
@@ -64,38 +64,48 @@ class LiteLED {
 
         // @brief Set color of single LED in strip, optionally send buffer to the strip
         // @param num Position of the LED in the strip, 0-based
-        // @param color Colour to set the strip to
+        // @param color Colour to set the LED to
         // @param show Optional. Set true to send the buffer to the strip before returning 
         // @return `ESP_OK` on success 
-        esp_err_t setPixel( size_t num, rgb_t color, bool show = 0);
-        esp_err_t setPixel( size_t num, crgb_t color, bool show = 0);
+        esp_err_t setPixel( size_t num, rgb_t color, bool show = 0 );
+        esp_err_t setPixel( size_t num, crgb_t color, bool show = 0 );
 
-        // @brief Set colors of multiple LEDs, optionally send buffer to the LEDs
+        // @brief Set colors of multiple consecutive LEDs, optionally send buffer to the strip
         // @param start First LED index, 0-based
-        // @param len Number of strip LEDs
-        // @param data Pointer to data. Layout must match the colour type.
+        // @param len The number of consecutive LEDs in the strip to which we are writing
+        // @param data Pointer to data. Layout must match the colour type
         // @param show Optional. Set true to send the buffer to the strip before returning
         // @return `ESP_OK` on success
-        esp_err_t setPixels( size_t start, size_t len, rgb_t *data, bool show = 0);
-        esp_err_t setPixels( size_t start, size_t len, crgb_t *data, bool show = 0);
+        esp_err_t setPixels( size_t start, size_t len, rgb_t *data, bool show = 0 );
+        esp_err_t setPixels( size_t start, size_t len, crgb_t *data, bool show = 0 );
 
-        // @brief Set the strip to one color, optionally send buffer to the LEDs
-        // @param color rgb_t or crgb_t colour
+        // @brief Set the entire strip to a color, optionally send buffer to the LEDs
+        // @param color rgb_t or crgb_t Colour value to set the strip to
         // @param show Optional. Set true to send the buffer to the strip before returning 
         // @return `ESP_OK` on success
         esp_err_t fill( rgb_t color, bool show = 0 );
         esp_err_t fill( crgb_t color , bool show = 0 );
 
-        // @brief Clear the strip buffer, optionally send buffer to the LEDs
+        // @brief Clear the strip buffer, optionally send buffer to the strip
         // @param show Optional. Set true to send the buffer to the strip before returning
         // @return `ESP_OK` on success
         esp_err_t clear( bool show = 0 );
         
-        // @brief Set the intensity of the LEDs, optionally send buffer to the LEDs
-        // @param bright Brightness value
+        // @brief Set the intensity of the LEDs, optionally send buffer to the strip
+        // @param bright Brightness value, 0-255
         // @param show Optional. Set true to set strip intensity to `bright` before returning
         // @return `ESP_OK` on success
         esp_err_t brightness( uint8_t bright, bool show = 0 );
+        
+        // @brief Get, in rgb_t format, the color of single LED in strip
+        // @param num Position of the LED in the strip, 0-based
+        // @return The rgb_t color value of the LED 
+        rgb_t getPixel( size_t num );
+        
+        // @brief Get, in crgb_t format, the color of single LED in strip
+        // @param num Position of the LED in the strip, 0-based
+        // @return The crgb_t color value of the LED 
+        crgb_t getPixelC( size_t num );
 
     private:
         led_strip_t theStrip;   // LED strip object for this class
