@@ -203,7 +203,7 @@ Memory is required for each string buffer. It is recommended to check the return
 
 
 ## _
- 
+
 #### `show()`
 
 #### Description:
