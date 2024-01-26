@@ -228,3 +228,33 @@ esp_err_t led_strip_fill(led_strip_t *strip, size_t start, size_t len, rgb_t col
     return ESP_OK;
 }
 
+rgb_t led_strip_get_pixel( led_strip_t *strip, size_t num ) {
+    rgb_t res;
+    if ( !( strip && strip->buf && num <= strip->length ) ){
+        log_e( "getPixel(): invalid argument." );
+        res.r = res.g = res.b = 0;
+        return res;
+    }
+    size_t idx = num * COLOR_SIZE(strip);
+    // if ( strip->is_rgbw && strip->auto_w ) {
+    //     res.r = res.g = res.b = rgb_luma( strip->buf[idx + 3] );
+    //     return res;
+    // }
+    switch ( led_params[strip->type].order ) {
+        case ORDER_GRB:
+            res.g = strip->buf[idx];
+            res.r = strip->buf[idx + 1];
+            res.b = strip->buf[idx + 2];
+            break;
+        case ORDER_RGB:
+            res.r = strip->buf[idx];
+            res.g = strip->buf[idx + 1];
+            res.b = strip->buf[idx + 2];
+            break;
+        default:
+            log_e( "getPixel(): invalid colour order specifier." );
+            res.r = res.g = res.b = 0;
+    }
+    return res;
+}
+

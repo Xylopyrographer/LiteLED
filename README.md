@@ -2,25 +2,33 @@
 
 ## What is it?
 
-An arduino-esp32 library for controlling WS2812B, SK6812, APA106 and SM16703 RGB colour LED's with the ESP32 series of SoC's.
+An arduino-esp32 library for controlling WS2812B, SK6812, APA106 and SM16703 "clockless" RGB colour LED's with the ESP32 series of SoC's.
 
-It is a "light weight" library targeted for applications where simple colours or patterns on a LED strip or matrix panel are all that is required, such as driving the one colour LED found on many ESP32 development boards.
+It is a "light weight" library targeted for applications where simple colours or patterns on a LED strip or matrix panel are all that is required, such as driving the one colour RGB LED found on many ESP32 development boards.
 
 
 ## Features
 
-**•  Global brightness**<br>
-LiteLED lets the intensity of all LED's be set at once. This is non-destructive to the colour value of the LED.
+**Global brightness**
 
-Makes flashing the LED's very easy.
+- LiteLED lets the intensity of all LED's be set at once. This is non-destructive to the colour value of the LED.
+- Makes flashing the LED strip very easy.
 
-**•  Works with WiFi**<br>
-When used with a dual core ESP32 SoC, LiteLED is compatible with concurrent use of the WiFi system.
+**Works with WiFi**
 
-Requires that LiteLED and the WiFi system be run on different cores.
+- When used with a dual core ESP32 SoC, LiteLED is compatible with concurrent use of the WiFi system.
+- Requires that LiteLED and the WiFi system be run on different cores.
 
-**• Thread Safe**<br>
-Though not extensively tested, LiteLED should also be thread-safe.
+
+**Multi string capable**
+
+- Multiple LED strings can be concurrently driven.
+- Limited by available memory and RMT channels.
+
+
+**Thread Safe**
+
+- Though not extensively tested, LiteLED should also be thread-safe.
 
 
 ## Compatibility
@@ -32,18 +40,17 @@ LiteLED has been tested on the following SoC's:
 * ESP32-S2
 * ESP32-S3
 
-LiteLED requires at minimum arduino-esp32 core version 2.0.3. It will probably break under the pending arduino-esp32 core version 3.
-
 LiteLED uses the RMT peripheral of the ESP32 to send data to the LED strip. The RMT channel number is selectable.
 
+LiteLED requires at minimum arduino-esp32 core version 2.0.3. *It is not compatible with arduino-esp32 core versions 3 and greater*.
 
-##Colour Representation
+## Colour Representation
 
 The intensity and colour of an LED is defined by setting a value for each of its red, blue and green channels. Values range between `0` and `255`, where `0` is off and `255` is full on. By adjusting the values of each channel, different colours and intensities result.
 
 With LiteLED, colours are defined in two ways:
 
-**As an RGB colour structure**
+**_As an RGB colour structure_**
 
 In this way colours are defined as a structure of type `rgb_t` where a member of the structure represents the intensity of the red, blue and green channels for a particular LED. Members can be accessed using either `.r, .b, .g` or `.red, .blue, .green` notation.
 
@@ -51,14 +58,14 @@ In this way colours are defined as a structure of type `rgb_t` where a member of
 
 Define a colour:
 
-```rgb_t myColour = { .r = 47, .g = 26, .b = 167 };```
+`rgb_t myColour = { .r = 47, .g = 26, .b = 167 };`
 
 Set the green channel of a colour variable:
 
-```myColour.green = 76;```
+`myColour.green = 76;`
 
 
-**As an RGB colour code**
+**_As an RGB colour code_**
 
 In this way colours are defined as type `crgb_t` where the colour is represented by a 24-bit value within which eight bits are assigned for the intensity of the red, blue and green channels for a particular LED in the form `0xRRGGBB`.
 
@@ -66,20 +73,20 @@ In this way colours are defined as type `crgb_t` where the colour is represented
 
 Define a colour:
 
-```crgb_t myOtherColour = 0xff0000;     // pure red```
+`crgb_t myOtherColour = 0xff0000;    // pure red`
 
-```crbg_t yetAnotherColour = 0xafafaf;  // white-ish```
+`crbg_t yetAnotherColour = 0xafafaf;  // white-ish`
 
 
 **Notes:**
 
 1. Though not required, hex notation is typically used when defining `crgb_t` colours as it makes the values for each of the channels easier to see.
 
-2. Once defined, a colour cannot be accessed as the other type. For example, 
+2. Once defined, a colour cannot be accessed as the other type. For example,
 
 ```
 crgb_t myOtherColour = 0xff0000;
-myotherColour.blue = 123;    // oops - no can do
+myOtherColour.blue = 123;         // oops - no can do
 ```
 will produce an error at line 2 as `myOtherColour` is defined as type `crgb_t` and the statement is attempting to change the blue channel using `rgb_t` notation.
 
@@ -87,12 +94,15 @@ See also the *Kibbles and Bits* section below.
 
 ### Regarding RGBW Strips
 
-LiteLED can drive RGBW strips like SK6812 RGBW types however there is no direct method for setting the value of the W channel. By default LiteLED will automatically set the value of the W channel based on some behind the scenes magic derived from the R, G and B values for that LED.
+LiteLED can drive RGBW strips like SK6812 RGBW types however there is no direct method for setting the value of the W channel. By default LiteLED will automatically set the value of the W channel based on some behind the scenes magic derived from the R, G, and B values for that LED. Thus by default the R, G, B, and W LED's will illuminate based on the values set. 
 
 This behaviour can be disabled when initializing the strip in the `begin()` method. When disabled, the value of the W channel is set to 0 and the white LED will not illuminate. Given that RGBW strips are available with many choices for the colour temperature of the W LED, give it a shot both ways and pick the one that looks good to you.
 
 LiteLED does not support RGBWW type strips.
 
+## _
+
+# Using the Library
 
 ## Constructor
 
@@ -104,7 +114,7 @@ Where:
 
 **`led_type`**
 
-    One of the four possible LED types supported. Must be one of: 
+    One of the four possible LED types supported. Must be one of:
 
         `LED_STRIP_WS2812`
 
@@ -112,7 +122,7 @@ Where:
 
         `LED_STRIP_APA106`
 
-        `LED_STRIP_SM16703` 
+        `LED_STRIP_SM16703`
 
 **`rgbw`**
 
@@ -140,7 +150,12 @@ Where:
 
         `RMT_CHANNEL_7`
 
-    **Note:** Not all SoC's have the same number of RMT channels available. Confirm with the data sheet for the target SoC.
+**Notes:**
+
+1. Not all ESP32 SoC's have the same number of RMT channels. Confirm with the data sheet for the target SoC.     
+1. If driving more than one LED string, create an object for each string using a different RMT channel for each object. This is subject to the number of available RMT channels for the SoC. Strings can be of different LED types.
+1. If the constructor fails to initialize the RMT channel, an error message is sent to the serial port via the esp32 `log_e` facility. This is enabled in the Arduino IDE by selecting the *Core Debug Level* from the *Tools* menu.
+1. See also the **Note:** under `begin`.
 
 **Examples:**
 
@@ -148,25 +163,24 @@ Where:
 
     Creates a LiteLED strip object named `myStrip` made up of WS2812 LED's of type RGB using the default RMT channel.
 
-
     `LiteLED strip2( LED_STRIP_SK6812, 1, RMT_CHANNEL_2 );`
 
     Creates a LiteLED strip object named `strip2` made up of SK6812 RGBW LED's using RMT channel 2.
 
 
-## LiteLED Library Methods
+## Methods
 
-####`begin( data_pin, length, auto_w )`
+#### `begin( data_pin, length, auto_w )`
 
 #### Description:
 
-After calling the constructor, and before using any other LiteLED library methods, the LED object must be initialized by calling this function.
+After calling the constructor, and before using any other LiteLED library methods, the LED object must be initialized by calling this method.
 
 #### Parameters:
 
 **`data_pin`**
 
-The GPIO pin number of the SoC connected to the `DATA` or `DIN` pin of the LED's. Type is `uint8_t`.
+The GPIO number of the SoC connected to the `DATA` or `DIN` pin of the LED's. Type is `uint8_t`.
 
 **`length`**
 
@@ -174,25 +188,31 @@ The number of LED's in the strip. Type is `size_t`.
 
 **`auto_w`**
 
-An optional boolean parameter that when set to `false` will disable the automatic setting of the W channel for RGBW strips. Default if omitted is `true`.
+An optional boolean parameter that when set to `false` will disable the automatic setting of the W channel for RGBW strips.
+
+Default if omitted is `true`.
 
 See also *Regarding RGBW Strips* under the *Colour Representation* section above.
 
 #### Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
+    
+#### Note:
+Memory is required for each string buffer. It is recommended to check the return code to ensure the string buffers have been allocated. LiteLED does not support PSRAM so all buffers must fit into onboard RAM.
 
 
-## 
+## _
+
 #### `show()`
 
 #### Description:
 
-Send the LED colour buffer data to the strip.
+Send the LED buffer data to the strip.
 
 LiteLED maintains a buffer in memory that holds the colour data for each of the LED's in the strip.
 
-This data does not affect the colour of the LED's until a `show()` method is called. `show()` is the method that writes the data in its buffer to the LED strip.
+This data does not affect the colour of the LED's until a `show()` method is called. `show()` is the method that writes the data in the buffer to the LED strip.
 
 #### Parameters:
 
@@ -203,8 +223,9 @@ None
 `esp_err_t` code `ESP_OK` if successful.
 
 
-## 
-####`setPixel( num, color, show )`
+## _
+
+#### `setPixel( num, colour, show )`
 
 #### Description:
 
@@ -226,20 +247,20 @@ Type is either `rgb_t` or `crgb_t`.
 
 **`show`**
 
-An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colours of the LED's are set. Default if omitted is `false`.
+An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colour of the LED is set. Default if omitted is `false`.
 
 #### Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
 
 
-## 
+## _
 #### `setPixels( start, length, data, show )`
 
 
 #### Description:
 
-Set colours of a multiple consecutive LED's in the strip.
+Set colours of multiple consecutive LED's in the strip.
 
 `setPixels` reads LED colour data from a user-specified buffer in memory and writes that data to the internal LED strip buffer starting at position `start` for `len` number of LED's.
 
@@ -247,7 +268,7 @@ Set colours of a multiple consecutive LED's in the strip.
 
 **`start`**
 
-The starting position in the LED in the strip where the colour data is to be set.
+The starting position of the LED in the strip where the colour data is to be set.
 
 Type is `size_t`.
 
@@ -271,18 +292,17 @@ See also the *rgb_t structure definition* and *crgb_t definition* blurbs under t
 
 An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colours of the LED's are set. Default if omitted is `false`.
 
-
 #### Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
 
 
-## 
+## _
 #### `fill( color, show )`
 
 #### Description:
 
-Set all LEDs to the one colour.
+Set all LEDs to a single colour.
 
 #### Parameters:
 
@@ -294,14 +314,14 @@ Type is either `rgb_t` or `crgb_t`.
 
 **`show`**
 
-An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colours of the LED's are set. Default if omitted is `false`.
+An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colour of the LED's is set. Default if omitted is `false`.
 
 #### Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
 
 
-## 
+## _
 #### `clear( show )`
 
 #### Description:
@@ -312,14 +332,14 @@ Set all LED's to colour black.
 
 **`show`**
 
-An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colours of the LED's are set. Default if omitted is `false`.
+An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip. Default if omitted is `false`.
 
-#### Returns:
+####Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
 
 
-## 
+## _
 #### `brightness( bright, show )`
 
 #### Description:
@@ -328,27 +348,87 @@ Set the intensity of all LED's in the strip.
 
 The brightness is a global parameter for the entire strip. It does not change the colour value of any LED in the strip buffer.
 
-It is not required to be set as LiteLED defaults the brightness to 255 when initialized using the `begin` method. 
+It is not required to be set as LiteLED defaults the brightness to 255 (full on) when initialized using the `begin` method.
+
 
 #### Parameters:
 
 **`bright`**
 
 Value to set the strip brightness to.
-
+    
 Type is `uint8_t`.
-
+    
 Range is `0` to `255`.
 
 **`show`**
 
-An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip after the colours of the LED's are set. Default if omitted is `false`.
+An optional parameter of type `bool` that if set `true` will send the strip buffer to the strip after setting the brightness. Default if omitted is `false`.
 
 #### Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
 
 
+#### Note:
+
+A change in intensity does not take effect until after a `show()` method is called or by using this method with the `show` parameter set to `true`.
+
+## _
+#### `getPixel( num )`
+
+#### Description:
+
+Get the colour of a LED in the strip in `rgb_t` format.
+
+#### Parameters:
+
+**`num`**
+
+The number of the LED in the strip to get the colour of.
+
+The first LED in the strip is `0`.
+
+Type is `size_t`.
+
+#### Returns:
+
+The colour of the LED at position `num` in the strip in `rgb_t` format.
+
+If the strip is of RGBW type, the method returns only the LED R, G, and B values. The W value is not available.
+
+#### Notes:
+
+If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns R, G, and B values set to `0`.
+
+## _
+#### `getPixelC( num )`
+
+#### Description:
+
+Get the colour of a LED in the strip in `crgb_t` format.
+
+#### Parameters:
+
+**`num`**
+
+The number of the LED in the strip to get the colour of.
+
+The first LED in the strip is `0`.
+
+Type is `size_t`.
+
+#### Returns:
+
+The colour of the LED at position `num` in the strip in `crgb_t` format.
+
+If the strip is of RGBW type, the method returns only the LED R, G, and B values. The W value is not available.
+
+#### Notes:
+
+If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns `0x000000`.
+
+## _
 
 ## Kibbles and Bits
 
@@ -359,9 +439,9 @@ LiteLED is based on the `led_strip` driver from the esp-idf-lib. The repository 
 
 Full credit and recognition to Uncle Rus and the team that supplies and supports this incredible resource.
 
-### rgb_t structure definition
+### `rgb_t` structure definition
 
-LiteLED stores all colour data internally as `rgb_t` data. The definition of that structure is:
+LiteLED stores all colour data internally as `rgb_t` structure. The definition of that structure is:
 
 ```
 typedef struct {
@@ -383,25 +463,24 @@ typedef struct {
 
 Thus, if looking use the `setPixels()` method to copy a user-specified buffer into a strip, if the data is in `rgb_t` format, the buffer size must be, in `uint8_t` terms, at least `3 * length` where `length` is the number of LED's in the strip you are changing with the `setPixels` method.
 
-For RGBW strips, the W channel value is set internally by the library so no extra room in the buffer is required. See *Regarding RGBW Strips* under the *Colour Representation* section above. 
+For RGBW strips, the W channel value is set internally by the library so no extra room in the buffer is required. See *Regarding RGBW Strips* under the *Colour Representation* section above.
 
-### crgb_t definition
+### `crgb_t` definition
 
 `crgb_t` data is defined as:
 
-```
-typedef uint32_t crgb_t;
-```
+```typedef uint32_t crgb_t;```
+
 Thus, if looking use the `setPixels()` method to copy a user-specified buffer into a strip, if the data is in `cgb_t` format, the buffer size must be, in `uint8_t` terms, at least `4 * length` where `length` is the number of LED's in the strip you are changing with the `setPixels` method.
 
-For RGBW strips, the W channel value is set internally by the library so no extra room in the buffer is required. See *Regarding RGBW Strips* under the *Colour Representation* section above. 
+For RGBW strips, the W channel value is set internally by the library so no extra room in the buffer is required. See *Regarding RGBW Strips* under the *Colour Representation* section above.
 
 
 ### Return Status Codes
 
-The LiteLED methods (excepting the constructor) return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
+The LiteLED methods that write to the string buffer (everything except the constructor the the `getPixel` methods) return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
 
-If things go OK, the return code is `ESP_OK` which is of type `int` with a value of `0`. So a quick check would be, if the return code anything other than `0`, something went amok.
+If things go OK, the return code is `ESP_OK` which is of type `int` with a value of `0`. So a quick check would be, if the return code is anything other than `0`, something went amok.
 
 Full description of these codes can be found on the Espressif ESP-IDF site [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/error-codes.html?highlight=error%20handling).
 
@@ -426,7 +505,7 @@ copies or substantial portions of the Software.
 
 **THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
