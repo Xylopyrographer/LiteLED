@@ -18,6 +18,7 @@ RMT_CHANNEL_7		KEYWORD1
 begin		KEYWORD2
 brightness	KEYWORD2
 clear		KEYWORD2
+getBrightness	KEYWORD2
 getPixel	KEYWORD2
 getPixelC	KEYWORD2
 setPixel	KEYWORD2
