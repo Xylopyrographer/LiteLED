@@ -1,5 +1,7 @@
 # LiteLED
 
+## v1.2.0
+
 ## What is it?
 
 An arduino-esp32 library for controlling WS2812B, SK6812, APA106 and SM16703 "clockless" RGB colour LED's with the ESP32 series of SoC's.
@@ -50,7 +52,7 @@ The intensity and colour of an LED is defined by setting a value for each of its
 
 With LiteLED, colours are defined in two ways:
 
-**_As an RGB colour structure_**
+_**As an RGB colour structure**_
 
 In this way colours are defined as a structure of type `rgb_t` where a member of the structure represents the intensity of the red, blue and green channels for a particular LED. Members can be accessed using either `.r, .b, .g` or `.red, .blue, .green` notation.
 
@@ -65,7 +67,7 @@ Set the green channel of a colour variable:
 `myColour.green = 76;`
 
 
-**_As an RGB colour code_**
+_**As an RGB colour code**_
 
 In this way colours are defined as type `crgb_t` where the colour is represented by a 24-bit value within which eight bits are assigned for the intensity of the red, blue and green channels for a particular LED in the form `0xRRGGBB`.
 
@@ -98,7 +100,7 @@ LiteLED can drive RGBW strips like SK6812 RGBW types however there is no direct 
 
 This behaviour can be disabled when initializing the strip in the `begin()` method. When disabled, the value of the W channel is set to 0 and the white LED will not illuminate. Given that RGBW strips are available with many choices for the colour temperature of the W LED, give it a shot both ways and pick the one that looks good to you.
 
-LiteLED does not support RGBWW type strips.
+LiteLED does not support RGBWW (dual white channel) type strips.
 
 ## _
 
@@ -150,14 +152,14 @@ Where:
 
         `RMT_CHANNEL_7`
 
-**Notes:**
+**Notes**
 
-1. Not all ESP32 SoC's have the same number of RMT channels. Confirm with the data sheet for the target SoC.     
-1. If driving more than one LED string, create an object for each string using a different RMT channel for each object. This is subject to the number of available RMT channels for the SoC. Strings can be of different LED types.
+1. Not all ESP32 SoC's have the same number of RMT channels. Confirm with the data sheet for the target device.     
+1. If driving more than one LED string, create an object for each string using a different RMT channel for each object. This is subject to the number of available RMT channels for the SoC. Strings can be of different LED types (but you cannot mix types within a string).
 1. If the constructor fails to initialize the RMT channel, an error message is sent to the serial port via the esp32 `log_e` facility. This is enabled in the Arduino IDE by selecting the *Core Debug Level* from the *Tools* menu.
 1. See also the **Note:** under `begin`.
 
-**Examples:**
+**Examples**
 
     `LiteLED myStrip( LED_STRIP_WS2812, 0 );`
 
@@ -180,11 +182,15 @@ After calling the constructor, and before using any other LiteLED library method
 
 **`data_pin`**
 
-The GPIO number of the SoC connected to the `DATA` or `DIN` pin of the LED's. Type is `uint8_t`.
+The ESP32 GPIO number connected to the `DATA` or `DIN` pin of the LED's.
+
+Type is `uint8_t`.
 
 **`length`**
 
-The number of LED's in the strip. Type is `size_t`.
+The number of physical LED's in the strip.
+
+Type is `size_t`.
 
 **`auto_w`**
 
@@ -212,7 +218,7 @@ Send the LED buffer data to the strip.
 
 LiteLED maintains a buffer in memory that holds the colour data for each of the LED's in the strip.
 
-This data does not affect the colour of the LED's until a `show()` method is called. `show()` is the method that writes the data in the buffer to the LED strip.
+This data does not affect the colour of the LED's until a `show()` or a method that calls `show()` is used.
 
 #### Parameters:
 
@@ -222,6 +228,9 @@ None
 
 `esp_err_t` code `ESP_OK` if successful.
 
+#### Note:
+
+`show()` and other methods that call `show()` always send the entire buffer to the strip. Thus, if you're making multiple changes to the LED colours, make all changes before using `show()` as that will execute much faster and without flickering or other artefacts.
 
 ## _
 
@@ -235,7 +244,9 @@ Set the colour of a single LED in the strip.
 
 **`num`**
 
-The number of the LED in the strip to set the colour. Type is `size_t`.
+The number of the LED in the strip to set the colour.
+
+Type is `size_t`.
 
 The first LED in the strip is `0`.
 
@@ -255,7 +266,7 @@ An optional parameter of type `bool` that if set `true` will send the LED buffer
 
 
 ## _
-#### `setPixels( start, length, data, show )`
+#### `setPixels( start, length, *data, show )`
 
 
 #### Description:
@@ -346,10 +357,9 @@ An optional parameter of type `bool` that if set `true` will send the LED buffer
 
 Set the intensity of all LED's in the strip.
 
-The brightness is a global parameter for the entire strip. It does not change the colour value of any LED in the strip buffer.
+Brightness is a global parameter for the entire strip. It does not change the colour value of any LED in the strip buffer.
 
 It is not required to be set as LiteLED defaults the brightness to 255 (full on) when initialized using the `begin` method.
-
 
 #### Parameters:
 
@@ -369,10 +379,37 @@ An optional parameter of type `bool` that if set `true` will send the strip buff
 
 `esp_err_t` code `ESP_OK` if successful.
 
+#### Note:
+
+A change in brightness does not take effect until after a `show()` or another method that calls `show()` is used.
+
+## _
+#### `getBrightness( )`
+
+#### Description:
+
+Get the intensity of the strip.
+
+#### Parameters:
+
+None.
+
+#### Returns:
+
+The brightness value of the strip.
+
+Type is `uint8_t`.
 
 #### Note:
 
-A change in intensity does not take effect until after a `show()` method is called or by using this method with the `show` parameter set to `true`.
+The method returns the actual operating intensity value of the strip. That is, it returns the brightness value used the last time a `show()` or method that calls `show()` was called. 
+
+If `getBrightness()` is used after using `brightness()` but before a `show()` or method that calls `show()` was used, the return value will be what was set with the `brightness()` method before the last call to `show()`.
+
+See also the **Note:** under `brightness()`.
+
+If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns `0`.
+
 
 ## _
 #### `getPixel( num )`
@@ -393,13 +430,17 @@ Type is `size_t`.
 
 #### Returns:
 
-The colour of the LED at position `num` in the strip in `rgb_t` format.
+The colour of the LED at position `num` in the strip.
 
-If the strip is of RGBW type, the method returns only the LED R, G, and B values. The W value is not available.
+Type is `rgb_t`.
+
+If the strip is of RGBW type, the method returns only the R, G, and B values. The W value is not available.
 
 #### Notes:
 
-If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns R, G, and B values set to `0`.
+1. The method returns the colour value for LED `num` from its internal buffer. If the buffer has not yet been sent to the strip using `show()` or a method that calls `show()`, the colour of the LED may not match the returned value.
+
+1. If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns R, G, and B values set to `0`.
 
 ## _
 #### `getPixelC( num )`
@@ -420,24 +461,21 @@ Type is `size_t`.
 
 #### Returns:
 
-The colour of the LED at position `num` in the strip in `crgb_t` format.
+The colour of the LED at position `num` in the strip.
 
-If the strip is of RGBW type, the method returns only the LED R, G, and B values. The W value is not available.
+Type is `crgb_t`.
+
+If the strip is of RGBW type, the method returns only the R, G, and B values. The W value is not available.
 
 #### Notes:
 
-If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns `0x000000`.
+1. The method returns the colour value for LED `num` from its internal buffer. If the buffer has not yet been sent to the strip using `show()` or a method that calls `show()`, the colour of the LED may not match the returned value.
+
+1. If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns `0x000000`.
 
 ## _
 
 ## Kibbles and Bits
-
-### Acknowledgement
-
-LiteLED is based on the `led_strip` driver from the esp-idf-lib. The repository can be found on GitHub at:
-[https://github.com/UncleRus/esp-idf-lib](https://github.com/UncleRus/esp-idf-lib)
-
-Full credit and recognition to Uncle Rus and the team that supplies and supports this incredible resource.
 
 ### `rgb_t` structure definition
 
@@ -478,7 +516,7 @@ For RGBW strips, the W channel value is set internally by the library so no extr
 
 ### Return Status Codes
 
-The LiteLED methods that write to the string buffer (everything except the constructor the the `getPixel` methods) return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
+The LiteLED methods that write to the string buffer (everything except the constructor and the `get...` methods) return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
 
 If things go OK, the return code is `ESP_OK` which is of type `int` with a value of `0`. So a quick check would be, if the return code is anything other than `0`, something went amok.
 
@@ -486,6 +524,29 @@ Full description of these codes can be found on the Espressif ESP-IDF site [here
 
 If you're really interested in diving deeper, head over to the Espressif ESP-IDF Error Handling docs [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/error-handling.html?highlight=error%20handling).
 
+### Acknowledgement
+
+LiteLED is based on the `led_strip` driver from the esp-idf-lib. That repository can be found on GitHub at:
+[https://github.com/UncleRus/esp-idf-lib](https://github.com/UncleRus/esp-idf-lib)
+
+Full credit and recognition to Uncle Rus and the team that supplies and supports this incredible resource.
+
+## _
+
+## Revision History
+
+### v1.2.0
+
+- add method to get the brightness value of the strip.
+
+### v1.1.0
+
+- add methods to get the colour of a LED in the strip.
+
+### v1.0.0
+- initial release.
+
+## -
 
 ## License
 

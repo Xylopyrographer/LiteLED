@@ -15,9 +15,8 @@ typedef uint8_t fract8;   // ANSI: unsigned short _Fract
 //  the numerator of a fraction whose denominator is 256
 //  In other words, it computes i * (scale / 256)
 //  4 clocks AVR with MUL, 2 clocks ARM
-LIB8STATIC_ALWAYS_INLINE uint8_t scale8(uint8_t i, fract8 scale)
-{
-    return (((uint16_t) i) * (1 + (uint16_t) (scale))) >> 8;
+LIB8STATIC_ALWAYS_INLINE uint8_t scale8( uint8_t i, fract8 scale ) {
+    return ( ( ( uint16_t ) i ) * ( 1 + ( uint16_t )( scale ) ) ) >> 8;
 }
 
 //  The "video" version of scale8 guarantees that the output will
@@ -25,10 +24,9 @@ LIB8STATIC_ALWAYS_INLINE uint8_t scale8(uint8_t i, fract8 scale)
 //  inputs are non-zero, the output is guaranteed to be non-zero.
 //  This makes for better 'video'/LED dimming, at the cost of
 //  several additional cycles.
-LIB8STATIC_ALWAYS_INLINE uint8_t scale8_video(uint8_t i, fract8 scale)
-{
-    return (((int) i * (int) scale) >> 8) + ((i && scale) ? 1 : 0);
-}    
+LIB8STATIC_ALWAYS_INLINE uint8_t scale8_video( uint8_t i, fract8 scale ) {
+    return ( ( ( int ) i * ( int ) scale ) >> 8 ) + ( ( i && scale ) ? 1 : 0 );
+}
 
 // RGB color representation (array style)
 typedef struct {
@@ -77,7 +75,7 @@ static inline rgb_t rgb_from_values( uint8_t r, uint8_t g, uint8_t b ) {
 
 // Convert RGB color to 24-bit color code 0x00RRGGBB
 static inline crgb_t rgb_to_code( rgb_t color ) {
-    return ( (crgb_t)color.r << 16 ) | ( (crgb_t)color.g << 8 ) | color.b;
+    return ( ( crgb_t )color.r << 16 ) | ( ( crgb_t )color.g << 8 ) | color.b;
 }
 
 // Get the 'luma' of a RGB color - aka roughly how much light the RGB pixel
