@@ -66,6 +66,10 @@ esp_err_t LiteLED::setPixels( size_t start, size_t len, rgb_t* data, bool show )
 
 esp_err_t LiteLED::setPixels( size_t start, size_t len, crgb_t* data, bool show ) {
     esp_err_t _res = led_strip_set_pixels_c( &theStrip, start, len, data );
+    if (_res != ESP_OK)
+        return _res;
+    if (show)
+        _res = LiteLED::show();
     return _res;
 }
 
