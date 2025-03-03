@@ -1,6 +1,6 @@
 # LiteLED
 
-## v1.2.0
+## v1.2.1
 
 ## What is it?
 
@@ -534,6 +534,11 @@ Full credit and recognition to Uncle Rus and the team that supplies and supports
 ## _
 
 ## Revision History
+
+### v1.2.1
+
+- Bug fix: `setPixels()`, with `crgb_t` data, would not flush the buffer to the LED's when the parameter `show` was `true`.<br>
+- Bug fix: `setPixels()`, with `rgb_t` data, would always start at `0` regardless of the `start` value provided.
 
 ### v1.2.0
 
