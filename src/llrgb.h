@@ -84,5 +84,6 @@ static inline uint8_t rgb_luma( rgb_t a ) {
     return scale8( a.r, 54 ) + scale8( a.g, 183 ) + scale8( a.b, 18 );
 }
 
-#endif
+#endif /* __LLRGB_H__ */
+
 // llrgb.h

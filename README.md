@@ -1,10 +1,10 @@
 # LiteLED
 
-## v1.2.1
+## v2.0.0
 
 ## What is it?
 
-An arduino-esp32 library for controlling WS2812B, SK6812, APA106 and SM16703 "clockless" RGB colour LED's with the ESP32 series of SoC's.
+An arduino-esp32 library for the Espressif ESP32 series of SoC's for controlling WS2812B, SK6812, APA106 and SM16703 intelligent "clockless" RGB colour LED's.
 
 It is a "light weight" library targeted for applications where simple colours or patterns on a LED strip or matrix panel are all that is required, such as driving the one colour RGB LED found on many ESP32 development boards.
 
@@ -15,6 +15,7 @@ It is a "light weight" library targeted for applications where simple colours or
 
 - LiteLED lets the intensity of all LED's be set at once. This is non-destructive to the colour value of the LED.
 - Makes flashing the LED strip very easy.
+
 
 **Works with WiFi**
 
@@ -35,6 +36,8 @@ It is a "light weight" library targeted for applications where simple colours or
 
 ## Compatibility
 
+### SoC Models
+
 LiteLED has been tested on the following SoC's:
 
 * ESP32
@@ -42,13 +45,52 @@ LiteLED has been tested on the following SoC's:
 * ESP32-S2
 * ESP32-S3
 
-LiteLED uses the RMT peripheral of the ESP32 to send data to the LED strip. The RMT channel number is selectable.
+Would appreciate feedback on use of this library on other models.
 
-LiteLED requires at minimum arduino-esp32 core version 2.0.3. *It is not compatible with arduino-esp32 core versions 3 and greater*.
+LiteLED uses the RMT peripheral of the ESP32 to send data to the LED strip and therefore the target device must have an RMT peripheral. As the family of ESP32 models grows, this is not always the case.
+
+### Compatibility with arduino-esp32 Core Versions
+
+There have been a number of "interesting" changes with regard to how the RMT peripheral is supported across the arduino-esp32 core starting with core version 3.0.0.
+
+Creating a single library that supports core versions from 3.0.0 to 3.0.7 proved to be a bit of a challenge so the decision was made to exclude a limited number of core releases from the version 3.0.x stream. The TLDR version of this is LiteLED requires methods that are not available in the excluded versions. Fire up a note in the library GitHub Discussions page if you're curious.
+
+The table below summarizes compatibility with arduino-esp32 core versions from 2.0.0 onward.
+
+| **core version** | **Compatible <br>LiteLED<br> Version** | **Note** |
+|:----------------:|:------------------------------------:|:--------:|
+|      < 2.0.3     |                 None                 |     1    |
+|  2.0.3 to 2.0.17 |                 1.2.1                |          |
+|  3.0.0 to 3.0.2  |                 None                 |     1    |
+|  3.0.3 to 3.0.7  |                 1.2.1                |     2    |
+|  3.1.0 and later |                 2.0.0                |     3    |
+
+**Notes:**
+
+1. Not compatible.
+2. Requires the `-DESP32_ARDUINO_NO_RGB_BUILTIN` workaround discussed on the arduino-esp32 GitHub site [here](https://github.com/espressif/arduino-esp32/pull/9941) and as shown in the example [here](https://github.com/espressif/arduino-esp32/tree/master/libraries/ESP32/examples/RMT/Legacy_RMT_Driver_Compatible).
+3. Fully compatible.
+
+### Breaking Change
+
+As the underlying method of using the RMT peripheral was completely redone starting with  arduino-esp32 core version 3.0.0, this has caused a breaking change in the method used to declare the LiteLED object starting at LiteLED version 2.0.0.
+
+Refer to *Constructor* under the *Using the Library* section below for details.
+
+### New Features
+
+LiteLED version 2 introduces additional functionality.
+
+- `begin()` adds a new method to support RMT DMA and RMT interrupt priority.
+- Methods are provided to set and reset the LED colour order.
+- Support for "WS2812" LED's with RGB colour order added.
+- A method to fill the strip with random colours had been added.
+
+# Using the Library
 
 ## Colour Representation
 
-The intensity and colour of an LED is defined by setting a value for each of its red, blue and green channels. Values range between `0` and `255`, where `0` is off and `255` is full on. By adjusting the values of each channel, different colours and intensities result.
+The intensity and colour of a LED is defined by setting a value for each of its red, blue and green channels. Values range between `0` and `255`, where `0` is off and `255` is full on. By adjusting the values of each channel, different colours and intensities result.
 
 With LiteLED, colours are defined in two ways:
 
@@ -104,79 +146,56 @@ LiteLED does not support RGBWW (dual white channel) type strips.
 
 ## _
 
-# Using the Library
-
 ## Constructor
 
 Create a strip object.
 
-**`LiteLED( led_type, rgbw, channel );`**
+**`LiteLED( led_type, rgbw );`**
 
 Where:
 
 **`led_type`**
 
-    One of the four possible LED types supported. Must be one of:
-
-        `LED_STRIP_WS2812`
-
-        `LED_STRIP_SK6812`
-
-        `LED_STRIP_APA106`
-
-        `LED_STRIP_SM16703`
+    One of the five supported LED types. Must be one of:<br><br>
+        `LED_STRIP_WS2812`<br>
+        `LED_STRIP_WS2812_RGB`<br>
+        `LED_STRIP_SK6812`<br>
+        `LED_STRIP_APA106`<br>
+        `LED_STRIP_SM16703`<br>
 
 **`rgbw`**
 
     A boolean set to `true` if the `led_type` is of  RGBW type, `false` if not.
 
-**`channel`**
-
-    Optional parameter used to specify which RMT channel number LiteLED should use. Default is `RMT_CHANNEL_0`.
-
-    If specified, must be one of:    
-
-        `RMT_CHANNEL_0`
-
-        `RMT_CHANNEL_1`
-
-        `RMT_CHANNEL_2`
-
-        `RMT_CHANNEL_3`
-
-        `RMT_CHANNEL_4`
-
-        `RMT_CHANNEL_5`
-
-        `RMT_CHANNEL_6`
-
-        `RMT_CHANNEL_7`
 
 **Notes**
 
-1. Not all ESP32 SoC's have the same number of RMT channels. Confirm with the data sheet for the target device.     
-1. If driving more than one LED string, create an object for each string using a different RMT channel for each object. This is subject to the number of available RMT channels for the SoC. Strings can be of different LED types (but you cannot mix types within a string).
-1. If the constructor fails to initialize the RMT channel, an error message is sent to the serial port via the esp32 `log_e` facility. This is enabled in the Arduino IDE by selecting the *Core Debug Level* from the *Tools* menu.
-1. See also the **Note:** under `begin`.
+1. **BREAKING CHANGE**. With earlier versions of the library, you could optionally specify an RMT channel when creating the strip object. As a result of changes in the underlying code starting with arduino-esp32 core 3.0.0, the RMT channel is now automatically assigned. It is no longer possible to specify the RMT channel. Your code will not compile if that parameter is specified. The code will need to be modified by removing the RMT channel specifier if this option was used.
+
+1. If driving multiple strings be aware that not all ESP32 SoC's have the same number of RMT channels. Confirm with the data sheet for the target device.  
+   
+1. If driving more than one LED string, create an object for each string. This is subject to the number of available RMT channels for the SoC. Strings can be of different LED types, but you cannot mix types within a string.
+
+2. The standard colour order for WS2812 LED's is GRB. However it's been seen that there are LED's stated as WS2812 but have a colour order of RGB. The `LED_STRIP_WS2812_RGB` type was added as a result. If the colours of your WS2812 strip are odd, try using this type.
 
 **Examples**
 
     `LiteLED myStrip( LED_STRIP_WS2812, 0 );`
 
-    Creates a LiteLED strip object named `myStrip` made up of WS2812 LED's of type RGB using the default RMT channel.
+    Creates a LiteLED strip object named `myStrip` made up of WS2812 LED's.
 
-    `LiteLED strip2( LED_STRIP_SK6812, 1, RMT_CHANNEL_2 );`
+    `LiteLED strip2( LED_STRIP_SK6812, 1 );`
 
-    Creates a LiteLED strip object named `strip2` made up of SK6812 RGBW LED's using RMT channel 2.
+    Creates a LiteLED strip object named `strip2` made up of SK6812 RGBW LED's.
 
 
 ## Methods
 
-#### `begin( data_pin, length, auto_w )`
+#### `begin( data_pin, length, dma_flag, priority, auto_w );`
 
 #### Description:
 
-After calling the constructor, and before using any other LiteLED library methods, the LED object must be initialized by calling this method.
+After calling the constructor, and before using any other LiteLED library methods, the LED object must be initialized by a `begin()` method.
 
 #### Parameters:
 
@@ -186,11 +205,38 @@ The ESP32 GPIO number connected to the `DATA` or `DIN` pin of the LED's.
 
 Type is `uint8_t`.
 
+
 **`length`**
 
 The number of physical LED's in the strip.
 
 Type is `size_t`.
+
+
+**`dma_flag`**
+
+An enumerated value to enable use of DMA by the RMT peripheral.
+
+Type is `ll_dma_t` and must one of:<br><br>
+    `DMA_ON` - enables RMT DMA<br>
+    `DMA_OFF` - disables RMT DMA<br>
+    `DMA_DEFAULT` - equivalent to `DMA_OFF`<br>
+
+     **Note:** Not all ESP32 models support RMT DMA. If this is set to `DMA_ON` on unsupported ESP32 models the library will set this to `DMA_OFF` and throw a warning message during compilation.
+
+
+**`priority`**
+
+An enumerated value that selects the interrupt priority of the RMT driver.
+
+Type is `ll_priority_t ` and must one of:<br><br>
+    `PRIORITY_DEFAULT` - the RMT driver sets the priority<br>
+    `PRIORITY_HIGH`<br>
+    `PRIORITY_MED`<br>
+    `PRIORITY_LOW`<br>
+
+     **Note:** Recommendation is to use `PRIORITY_DEFAULT`, however there may be certain applications where increasing the priority improves performance.
+
 
 **`auto_w`**
 
@@ -205,7 +251,20 @@ See also *Regarding RGBW Strips* under the *Colour Representation* section above
 `esp_err_t` code `ESP_OK` if successful.
     
 #### Note:
-Memory is required for each string buffer. It is recommended to check the return code to ensure the string buffers have been allocated. LiteLED does not support PSRAM so all buffers must fit into onboard RAM.
+Memory is required for each string buffer. It is recommended to check the return code to ensure the string buffers have been allocated.
+
+
+## _
+
+#### `begin( data_pin, length, auto_w )`
+
+#### Description:
+
+Simplified version of the `begin()` method.
+
+Parameters are as per the full `begin()` method form described above.
+
+With this method, **`dma_flag`** is set to `DMA_DEFAULT` and **`priority`** is set to `PRIORITY_DEFAULT`.
 
 
 ## _
@@ -345,7 +404,7 @@ Set all LED's to colour black.
 
 An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip. Default if omitted is `false`.
 
-####Returns:
+#### Returns:
 
 `esp_err_t` code `ESP_OK` if successful.
 
@@ -443,6 +502,8 @@ If the strip is of RGBW type, the method returns only the R, G, and B values. Th
 1. If an error occurs, a message is sent to the serial port via the esp32 `log_e` facility and the method returns R, G, and B values set to `0`.
 
 ## _
+
+
 #### `getPixelC( num )`
 
 #### Description:
@@ -475,11 +536,90 @@ If the strip is of RGBW type, the method returns only the R, G, and B values. Th
 
 ## _
 
+#### `fillRandom( show )`
+
+#### Description:
+
+Fill the strip with random colours.
+
+#### Parameters:
+
+**`show`**
+
+An optional parameter of type `bool` that if set `true` will send the LED buffer data to the strip. Default if omitted is `false`.
+
+#### Returns:
+
+`esp_err_t` code `ESP_OK` if successful.
+
+
+#### Notes:
+
+1. Each colour channel of the LED is set independently to a random value between 5 and 255. Thus when using this method, the strip can be quite bright. The `brightness()` method can be used beforehand to lower the strip intensity.
+
+
+## _
+
+#### `setOrder( color_order )`
+
+#### Description:
+
+Set the colour order of the LED's in the strip.
+
+#### Parameters:
+
+**`color_order`**
+
+An enumerated value that sets the colour order of the LED's in the strip.
+
+Type is `ll_order_t` and must be one of:<br><br>
+    `ORDER_RGB`<br>
+    `ORDER_RBG`<br>
+    `ORDER_GRB`<br>
+    `ORDER_GBR`<br>
+    `ORDER_BRG`<br>
+    `ORDER_BGR`<br>
+
+#### Returns:
+
+`esp_err_t` code `ESP_OK` if successful.
+
+#### Notes:
+
+1. This method overrides the order set by the LED strip type. As all LED strip types have a defined colour order it is not required to call this method. It was added to address LED's with non-standard colour orders.
+2. Can be called any time after declaring the LiteLED object and takes effect after a call to `show()` or any call that invokes `show()` and remains in effect until another call to `setOrder()` or `resetOrder()` (see below) is made.
+3. FWIW, originally intended to be a "one and done" call, multiple calls can be made for creative effect.
+
+
+## _
+
+#### `resetOrder()`
+
+#### Description:
+
+Restores the colour order of the LED's in the strip as defined by the LED strip type.
+
+#### Parameters:
+
+none
+
+#### Returns:
+
+`esp_err_t` code `ESP_OK` if successful.
+
+#### Notes:
+
+1. Can be called any time after declaring the LiteLED object and takes effect after a call to `show()` or any call that invokes `show()` and remains in effect until another call to `setOrder()` or `resetOrder()` is made.
+
+
+## _
+
+
 ## Kibbles and Bits
 
 ### `rgb_t` structure definition
 
-LiteLED stores all colour data internally as `rgb_t` structure. The definition of that structure is:
+LiteLED stores all colour data internally as an `rgb_t` structure. The definition of that structure is:
 
 ```
 typedef struct {
@@ -509,31 +649,44 @@ For RGBW strips, the W channel value is set internally by the library so no extr
 
 ```typedef uint32_t crgb_t;```
 
-Thus, if looking use the `setPixels()` method to copy a user-specified buffer into a strip, if the data is in `cgb_t` format, the buffer size must be, in `uint8_t` terms, at least `4 * length` where `length` is the number of LED's in the strip you are changing with the `setPixels` method.
+Thus, if looking use the `setPixels()` method to copy a user-specified buffer into a strip, if the data is in `cgb_t` format, the buffer size must be, in `uint8_t` terms, at least `4 * length` where `length` is the number of LED's in the strip you are changing with the `setPixels()` method.
 
 For RGBW strips, the W channel value is set internally by the library so no extra room in the buffer is required. See *Regarding RGBW Strips* under the *Colour Representation* section above.
 
 
 ### Return Status Codes
 
-The LiteLED methods that write to the string buffer (everything except the constructor and the `get...` methods) return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
+The LiteLED methods that write to the string buffer or set/reset the colour order (everything else except the constructor and the `get...` methods) return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
 
-If things go OK, the return code is `ESP_OK` which is of type `int` with a value of `0`. So a quick check would be, if the return code is anything other than `0`, something went amok.
+If things go as normal, the return code is `ESP_OK` which is of type `int` with a value of `0`. So a quick check would be, if the return code is anything other than `0`, something went amok.
 
 Full description of these codes can be found on the Espressif ESP-IDF site [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/error-codes.html?highlight=error%20handling).
 
 If you're really interested in diving deeper, head over to the Espressif ESP-IDF Error Handling docs [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/error-handling.html?highlight=error%20handling).
 
+To assist in debugging, a number of error messages are sent to the serial port via the esp32 `log_e` facility. This is enabled in the Arduino IDE by selecting *Error* in the *Core Debug Level* from the *Tools* menu. If using PlatformIO or pioarduino, add `-DCORE_DEBUG_LEVEL=1` to `build_flags` section the `platform.ini` file.
+
 ### Acknowledgement
 
-LiteLED is based on the `led_strip` driver from the esp-idf-lib. That repository can be found on GitHub at:
-[https://github.com/UncleRus/esp-idf-lib](https://github.com/UncleRus/esp-idf-lib)
+A good chunk of LiteLED is based on the `led_strip` driver from the Uncle Rus [esp-idf-lib](https://github.com/UncleRus/esp-idf-lib). Full credit and recognition to the team that supplies and supports this incredible resource.
 
-Full credit and recognition to Uncle Rus and the team that supplies and supports this incredible resource.
+Starting with library version 2, the RMT driver is based on the espressif-idf example found [here](https://github.com/espressif/esp-idf/tree/a6c3a9cb/examples/peripherals/rmt/led_strip_simple_encoder).
 
 ## _
 
 ## Revision History
+
+### v2.0.0
+
+- Significant rewrite bringing compatibility with arduino-esp32 core version 3.1+. Refer to the *Compatibility* section above.
+- There is a breaking change with this release. Refer to the *Breaking Change* section above.
+- Added new `begin()` method to:
+    - support RMT DMA access if available in the ESP32 model.
+    - set the interrupt priority for the RMT driver.
+- Added `fillRandom()` method to fill the strip with random colours.
+- Added `setOrder()` method to set a custom LED colour order.
+- Added `resetOrder()` method to reset the LED colour order to its default.
+- Improved error checking and reporting.
 
 ### v1.2.1
 
