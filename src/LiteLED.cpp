@@ -21,7 +21,7 @@ LiteLED::LiteLED( led_strip_type_t led_type, bool rgbw ) {
 
 // destructor
 LiteLED::~LiteLED() {
-    // delete all resources used by library
+    // delete all resources used by the strip
     LiteLED::free();
 }
 
@@ -67,9 +67,7 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, ll_dma_t dma_flag, ll
 }
 
 esp_err_t LiteLED::show() {
-    // log_d( "In LiteLED:show. About to call led_strip_flush()." );
     esp_err_t _res = led_strip_flush( &theStrip );
-    // log_d( "In LiteLED:show. Back from call to led_strip_flush()." );
     if ( _res != ESP_OK ) {
         log_e( "Error in 'show()'. Cannot flush strip. Result = %s", esp_err_to_name( _res ) );
         return _res;
@@ -101,7 +99,6 @@ esp_err_t LiteLED::setPixel( size_t num, crgb_t color, bool show ) {
 }
 
 esp_err_t LiteLED::setPixels( size_t start, size_t len, rgb_t* data, bool show ) {
-    // esp_err_t _res = led_strip_set_pixels(&theStrip, ( size_t )0, ( size_t )theStrip.length, data );
     esp_err_t _res = led_strip_set_pixels( &theStrip, start, len, data );
     if ( _res != ESP_OK ) {
         return _res;

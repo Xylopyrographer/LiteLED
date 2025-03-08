@@ -4,6 +4,8 @@
     MIT Licensed as described in the file LICENSE
 */
 
+#include "driver/rmt_tx.h"
+
 #ifndef __LITELED_H__
 #define __LITELED_H__
 
@@ -62,20 +64,36 @@ enum color_order_t {
     ORDER_GBR,
     ORDER_BRG,
     ORDER_BGR,
-    ORDER_MAX
+    ORDER_MAX   // not a valid colour order, used to mark the end of the enum
 };
 
-// LED strip descriptor
 typedef struct {
-    led_strip_type_t        type;               // < LED type
-    bool                    is_rgbw;            // < set true for RGBW strips
-    bool                    auto_w;             // < set false to disable auto W channel setting for RBGW strips
-    uint8_t                 brightness;         // < brightness 0..255, pending next call to ::show() after change.
-    uint8_t                 bright_act;         // < actual brightness as set after last ::show
-    size_t                  length;             // < number of LEDs in strip
-    gpio_num_t              gpio;               // < GPIO pin connected to the strip DIN
-    uint8_t                 *buf;               // < pointer to the buffer that holds the LED data
+    rmt_tx_channel_config_t     led_chan_config;    /* RMT channel configuration for the LED strip. */
+    rmt_transmit_config_t       led_tx_config;      /* RMT transmit configuration */
+    rmt_channel_handle_t        led_chan = NULL;    /* RMT channel allocated by the RMT driver */
+    rmt_simple_encoder_config_t led_encoder_cfg;    /* RMT encoder configuration */
+    rmt_encoder_handle_t        led_encoder = NULL; /* RMT encoder handle */
+} led_strip_cfg_t;
+
+typedef struct {
+    rmt_symbol_word_t led_0;
+    rmt_symbol_word_t led_1;
+    rmt_symbol_word_t led_reset;
+    color_order_t order;
+} led_params_t;
+
+typedef struct {
+    uint8_t *buf;
+    size_t length;
+    uint8_t brightness;
+    uint8_t bright_act;
+    uint8_t gpio;
+    uint8_t type;
+    bool is_rgbw;
+    bool auto_w;
+    led_strip_cfg_t stripCfg;
 } led_strip_t;
+
 
 // defines for setting the led encoder DMA usage
 enum ll_dma_t : uint32_t {
