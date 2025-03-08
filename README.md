@@ -1,6 +1,6 @@
 # LiteLED
 
-## v2.0.0
+## v2.0.1
 
 ## What is it?
 
@@ -675,6 +675,10 @@ Starting with library version 2, the RMT driver is based on the espressif-idf ex
 ## _
 
 ## Revision History
+
+### v2.0.1
+
+- Bug fix. Driving multiple strips now works as expected.
 
 ### v2.0.0
 
