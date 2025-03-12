@@ -73,6 +73,7 @@ typedef struct {
     rmt_channel_handle_t        led_chan = NULL;    /* RMT channel allocated by the RMT driver */
     rmt_simple_encoder_config_t led_encoder_cfg;    /* RMT encoder configuration */
     rmt_encoder_handle_t        led_encoder = NULL; /* RMT encoder handle */
+    size_t                      enc_pos;            /* position in the LED data buffer */   
 } led_strip_cfg_t;
 
 typedef struct {

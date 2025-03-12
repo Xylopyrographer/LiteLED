@@ -162,27 +162,33 @@ IRAM_ATTR static size_t led_encoder_cb( const void* data, size_t data_size,
     if ( symbols_free < 8 ) {
         return 0;
     }
-    // We can calculate where in the data we are from the symbol pos.
-    size_t data_pos = symbols_written / 8;
+
+    led_strip_t *strip = ( led_strip_t* )arg; // Cast arg to led_strip_t*
     uint8_t *data_bytes = ( uint8_t* )data;
-    led_strip_t *strip = ( led_strip_t* )arg;   // Cast arg to led_strip_t*
-    uint8_t photons = strip->brightness;        // Get the brightness value
+    uint8_t photons = strip->brightness;      // Get the brightness value
+
+    // Retrieve the current position from enc_pos
+    size_t data_pos = strip->stripCfg.enc_pos;
+
     if ( data_pos < data_size ) {
-        uint8_t currentByte = scale8_video( data_bytes[ data_pos ], photons );  // Set the brightness of the colour value
+        uint8_t currentByte = scale8_video( data_bytes[ data_pos ], photons ); // Set the brightness of the colour value
         // Encode a byte, as in, convert the byte to an RMT symbol
         size_t symbol_pos = 0;
         for ( int bitmask = 0x80; bitmask != 0; bitmask >>= 1 ) {
             symbols[ symbol_pos++ ] = ( currentByte & bitmask ) ? led_params[ strip->type ].led_1 : led_params[ strip->type ].led_0;
         }
+        // Update the current position in the buffer
+        strip->stripCfg.enc_pos++;
         // We're done; we should have written 8 symbols.
         return symbol_pos;
     }
     else {
-        //All bytes already are encoded.
-        //Encode the reset, and we're done.
+        // All bytes already are encoded.
+        // Encode the reset, and we're done.
         symbols[ 0 ] = led_params[ strip->type ].led_reset;
-        *done = 1;          //Indicate end of the transaction.
-        return 1;           //we only wrote one symbol
+        strip->stripCfg.enc_pos = 0;    // reset the position in the buffer
+        *done = 1;                      // Indicate end of the transaction.
+        return 1;                       // We only wrote one symbol
     }
 }
 
