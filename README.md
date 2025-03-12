@@ -1,6 +1,6 @@
 # LiteLED
 
-## v2.0.1
+## v2.0.2
 
 ## What is it?
 
@@ -676,6 +676,12 @@ Starting with library version 2, the RMT driver is based on the espressif-idf ex
 
 ## Revision History
 
+
+### v2.0.2
+
+- Improved performance when concurrently driving multiple strips.
+- The `library.properties` file is correctly updated to reflect this version. Missed doing that last time so v2.0.1 was never found by most everyone. My bad.
+
 ### v2.0.1
 
 - Bug fix. Driving multiple strips now works as expected.
@@ -683,7 +689,7 @@ Starting with library version 2, the RMT driver is based on the espressif-idf ex
 ### v2.0.0
 
 - Significant rewrite bringing compatibility with arduino-esp32 core version 3.1+. Refer to the *Compatibility* section above.
-- There is a breaking change with this release. Refer to the *Breaking Change* section above.
+- **There is a breaking change with this release.** Refer to the *Breaking Change* section above.
 - Added new `begin()` method to:
     - support RMT DMA access if available in the ESP32 model.
     - set the interrupt priority for the RMT driver.
