@@ -194,7 +194,6 @@ IRAM_ATTR static size_t led_encoder_cb( const void* data, size_t data_size,
 
 esp_err_t led_strip_init( led_strip_t *strip ) {
     /* initializes all structures and variables required for the library */
-    esp_err_t res = ESP_OK;
     if ( !( strip && strip->length > 0 && strip->type < LED_STRIP_TYPE_MAX ) ) {
         log_e( "led_strip_init(): invalid aguments." );
         return ESP_ERR_INVALID_ARG;
