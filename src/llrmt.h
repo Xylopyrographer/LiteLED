@@ -131,8 +131,8 @@ static const led_params_t led_params[] = {
 // led_strip_cfg_t stripCfg;
 color_order_t custom_color_order = ORDER_GRB;
 bool use_custom_color_order = false;
-char *col_ord[] = { "order_rgb", "order_rbg", "order_grb", "order_gbr", "order_brg", "order_bgr", "order_max" };
-char *led_type[] = { "ws2812", "ws2812_rgb", "sk6812", "apa106", "sm167O3" };
+const char *col_ord[] = { "order_rgb", "order_rbg", "order_grb", "order_gbr", "order_brg", "order_bgr", "order_max" };
+const char *led_type[] = { "ws2812", "ws2812_rgb", "sk6812", "apa106", "sm167O3" };
 
 void led_strip_debug_dump( led_strip_t *strip );
 
