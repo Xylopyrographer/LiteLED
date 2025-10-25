@@ -1,48 +1,59 @@
 //
 /*
     ESP32 RMT-based driver for various types of RGB LED strips
-    MIT Licensed as described in the file LICENSE
 */
-
-#include "driver/rmt_tx.h"
 
 #ifndef __LITELED_H__
 #define __LITELED_H__
 
+#include <Arduino.h>
+
 // check for ESP32
-#if !ARDUINO_ARCH_ESP32
-    #error "LiteLED: This library is only for use with ESP32 boards."
-#endif
+static_assert( ARDUINO_ARCH_ESP32, "LiteLED: This library requires an ESP32 family microcontroller." );
 
 // check for arduino-esp32 core compatibility
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL( 2, 0, 3 ) ||    \
-    ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 3, 0, 0 ) && \
-    ESP_ARDUINO_VERSION <= ESP_ARDUINO_VERSION_VAL( 3, 0, 2 ) )
-#error "LiteLED: This library is not compatible with this version of the arduino-esp32 core. See the library documentation for options."
-#elif ( ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 2, 0, 3 ) ) && ( ESP_ARDUINO_VERSION <= ESP_ARDUINO_VERSION_VAL( 2, 0, 17 ) ) ) || \
-      ( ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 3, 0, 3 ) && ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL( 3, 1, 0 ) ) )
-#error "LiteLED: LiteLED version 1.2.1 is required for this version of the arduino-esp32 core. See the LiteLED library documentation for options."
-#endif
+static_assert( !( ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL( 2, 0, 3 ) ||
+                  ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 3, 0, 0 ) &&
+                    ESP_ARDUINO_VERSION <= ESP_ARDUINO_VERSION_VAL( 3, 0, 2 ) ) ),
+               "LiteLED: This library is not compatible with this version of the arduino-esp32 core. See the library documentation for options." );
+
+static_assert( !( ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 2, 0, 3 ) && ESP_ARDUINO_VERSION <= ESP_ARDUINO_VERSION_VAL( 2, 0, 17 ) ) ||
+                  ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 3, 0, 3 ) && ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL( 3, 1, 0 ) ) ),
+               "LiteLED: LiteLED version 1.2.1 is required for this version of the arduino-esp32 core. See the library documentation for options." );
 
 // check for RMT support
 #ifndef SOC_RMT_SUPPORTED
-    #if !SOC_RMT_SUPPORTED
-        #error "LiteLED: Use of this library requires an ESP32 with an RMT peripheral."
-    #endif
+    #define SOC_RMT_SUPPORTED 0
 #endif
+static_assert( SOC_RMT_SUPPORTED, "LiteLED: Use of this library requires an ESP32 with an RMT peripheral." );
 
 // check if the RMT supports DMA
 #ifdef SOC_RMT_SUPPORT_DMA
     #define LL_DMA_SUPPORT SOC_RMT_SUPPORT_DMA
 #else
     #define LL_DMA_SUPPORT 0
-#endif
-#if !LL_DMA_SUPPORT
-    // #warning "LiteLED: Selected ESP32 model does not support RMT DMA access. Use of RMT DMA will be disabled."
-    #pragma message "LiteLED: Selected ESP32 model does not support RMT DMA access. Use of RMT DMA will be disabled."
+    #warning "LiteLED: Selected ESP32 model does not support RMT DMA access. Use of RMT DMA will be disabled."
 #endif
 
+// check for RMT interrupt priority support
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL( 5, 1,2 )
+    #define LL_INT_PRIORITY_SUPPORT 1
+#else
+    #define LL_INT_PRIORITY_SUPPORT 0
+    #warning "LiteLED: This version of the core does not support setting of RMT interrupt priority. Default will be used."
+#endif
+
+#include "driver/rmt_tx.h"
 #include "llrgb.h"
+
+// Forward declaration for C linkage
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "esp32-hal-periman.h"
+#ifdef __cplusplus
+}
+#endif
 
 enum led_strip_type_t {
     /* note: if this enum is modified, must also
@@ -73,7 +84,7 @@ typedef struct {
     rmt_channel_handle_t        led_chan = NULL;    /* RMT channel allocated by the RMT driver */
     rmt_simple_encoder_config_t led_encoder_cfg;    /* RMT encoder configuration */
     rmt_encoder_handle_t        led_encoder = NULL; /* RMT encoder handle */
-    size_t                      enc_pos;            /* position in the LED data buffer */   
+    size_t                      enc_pos;            /* position in the LED data buffer */
 } led_strip_cfg_t;
 
 typedef struct {
@@ -92,6 +103,7 @@ typedef struct {
     uint8_t type;
     bool is_rgbw;
     bool auto_w;
+    bool use_psram;
     led_strip_cfg_t stripCfg;
 } led_strip_t;
 
@@ -100,7 +112,7 @@ typedef struct {
 enum ll_dma_t : uint32_t {
     DMA_ON = 1,
     DMA_OFF = 0,
-    DMA_DEFAULT = DMA_OFF
+    DMA_DEFAULT = DMA_OFF   // Default is OFF to preserve DMA channels for user applications
 };
 
 // defines for setting the led encoder callback interrupt priority level
@@ -110,6 +122,26 @@ enum ll_priority_t : int {
     PRIORITY_MED = 2,
     PRIORITY_LOW = 3
 };
+
+// defines for PSRAM buffer allocation preference
+enum ll_psram_t : uint32_t {
+    PSRAM_ENABLE = 1,
+    PSRAM_DISABLE = 0,
+    PSRAM_AUTO = 2  // Automatically use PSRAM if available
+};
+
+// Inline helper functions for capability checking
+namespace LiteLED_Utils {
+    // Check if DMA is supported on this chip at compile time
+    constexpr bool isDmaSupported() {
+        return LL_DMA_SUPPORT != 0;
+    }
+
+    // Check if interrupt priority setting is supported at compile time
+    constexpr bool isPrioritySupported() {
+        return LL_INT_PRIORITY_SUPPORT != 0;
+    }
+}
 
 class LiteLED {
   public:
@@ -127,14 +159,23 @@ class LiteLED {
     // @return 'ESP_OK' on success
     esp_err_t begin( uint8_t data_pin, size_t length, bool auto_w = true );
 
-    // @brief Initialize the strip
+    // @brief Initialize the strip with PSRAM option
+    // @param data_pin GPIO pin connected to the DIN pin of the strip
+    // @param length Number of LED's in the strip
+    // @param psram_flag Enumerated value that sets the PSRAM usage preference for the LED buffer
+    // @param auto_w Optional. Only used for RGBW strips. Set false to not use the automatic W channel value set by the library
+    // @return 'ESP_OK' on success
+    esp_err_t begin( uint8_t data_pin, size_t length, ll_psram_t psram_flag, bool auto_w = true );
+
+    // @brief Initialize the strip with DMA, interrupt priority and PSRAM options
     // @param data_pin GPIO pin connected to the DIN pin of the strip
     // @param length Number of LED's in the strip
     // @param dma_flag Enumerated value that sets the DMA usage of the led encoder
     // @param priority Enumerated value that sets the interrupt priority of led encoder callback
+    // @param psram_flag Enumerated value that sets the PSRAM usage preference for the LED buffer
     // @param auto_w Optional. Only used for RGBW strips. Set false to not use the automatic W channel value set by the library
     // @return 'ESP_OK' on success
-    esp_err_t begin( uint8_t data_pin, size_t length, ll_dma_t dma_flag, ll_priority_t priority, bool auto_w = true );
+    esp_err_t begin( uint8_t data_pin, size_t length, ll_dma_t dma_flag, ll_priority_t priority, ll_psram_t psram_flag, bool auto_w = true );
 
     // @brief Flush the the LED buffer to the strip
     esp_err_t show();
@@ -203,10 +244,43 @@ class LiteLED {
     // @return 'ESP_OK' on success
     esp_err_t resetOrder();
 
+    // @brief Check if this LiteLED instance is still valid
+    // @return true if the instance is valid and can be used, false if pin was reassigned
+    bool isValid() const;
+
+    // @brief Get the GPIO pin number used by this instance
+    // @return GPIO pin number, or -1 if not initialized
+    int getGpioPin() const {
+        return theStrip.gpio >= 0 ? ( int )theStrip.gpio : -1;
+    }
+
+    // @brief Static method to check if a GPIO is available for LiteLED use
+    // @param gpio_pin GPIO pin number to check
+    // @return true if available, false if in use by another peripheral
+    static bool isGpioAvailable( uint8_t gpio_pin );
+
+    // @brief Static method to get count of active LiteLED instances
+    // @return Number of currently active LiteLED instances
+    static uint8_t getActiveInstanceCount();
+
+    // @brief Invalidate this instance (called by registry on forced cleanup)
+    void invalidate() {
+        valid_instance = false;
+    }
+
   private:
     led_strip_t theStrip;   // LED strip object for this class
+    bool valid_instance;    // Fast validity check flag
     esp_err_t free();
+
+    // @brief Check and handle potential pin conflicts before operations
+    // @return ESP_OK if safe to proceed, error code otherwise
+    inline esp_err_t ll_checkPinState() const {
+        return valid_instance ? ESP_OK : ESP_ERR_INVALID_STATE;
+    }
 
 };   // class LiteLED
 
 #endif /* __LITELED_H__ */
+
+//  --- EOF --- //

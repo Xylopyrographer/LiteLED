@@ -1,7 +1,6 @@
 /*
     Helper stuff for the LiteLED library
         - Ported from FastLED
-        - MIT Licensed as described in the file LICENSE
 */
 
 #ifndef __LLRGB_H__
@@ -14,7 +13,6 @@ typedef uint8_t fract8;   // ANSI: unsigned short _Fract
 //  scale one byte by a second one, which is treated as
 //  the numerator of a fraction whose denominator is 256
 //  In other words, it computes i * (scale / 256)
-//  4 clocks AVR with MUL, 2 clocks ARM
 LIB8STATIC_ALWAYS_INLINE uint8_t scale8( uint8_t i, fract8 scale ) {
     return ( ( ( uint16_t ) i ) * ( 1 + ( uint16_t )( scale ) ) ) >> 8;
 }
@@ -86,4 +84,4 @@ static inline uint8_t rgb_luma( rgb_t a ) {
 
 #endif /* __LLRGB_H__ */
 
-// llrgb.h
+//  --- EOF --- //
