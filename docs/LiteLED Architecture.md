@@ -1,4 +1,4 @@
-# LiteLED Modular Architecture
+# LiteLED Architecture
 
 ## Overview
 
