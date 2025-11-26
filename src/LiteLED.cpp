@@ -83,25 +83,25 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, bool auto_w ) {
         return res;
     }
 
+    // Register channel -> instance mapping BEFORE registering with Peripheral Manager
+    // This ensures the deinit callback can find the instance if triggered
+    res = ll_register_channel_instance( theStrip.stripCfg.led_chan, this );
+    if ( res != ESP_OK ) {
+        log_d( "LiteLED: Failed to register channel instance" );
+        led_strip_free( &theStrip );
+        return res;
+    }
+
     // Register with Peripheral Manager
     if ( !perimanSetPinBus( data_pin, ESP32_BUS_TYPE_RMT_TX, ( void * )theStrip.stripCfg.led_chan, -1, -1 ) ) {
         log_d( "LiteLED: Failed to register GPIO %u with Peripheral Manager", data_pin );
+        ll_unregister_channel_instance( theStrip.stripCfg.led_chan );
         led_strip_free( &theStrip );
         return ESP_ERR_INVALID_STATE;
     }
 
     // Set extra type identifier
     perimanSetPinBusExtraType( data_pin, "LiteLED" );
-
-    // Register channel -> instance mapping for deinit callback
-    res = ll_register_channel_instance( theStrip.stripCfg.led_chan, this );
-    if ( res != ESP_OK ) {
-        log_d( "LiteLED: Failed to register channel instance" );
-        // Clean up Peripheral Manager registration
-        perimanSetPinBus( data_pin, ESP32_BUS_TYPE_INIT, NULL, -1, -1 );
-        led_strip_free( &theStrip );
-        return res;
-    }
 
     valid_instance = true;  // Mark instance as valid
     return ESP_OK;
@@ -160,25 +160,25 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, ll_psram_t psram_flag
         return res;
     }
 
+    // Register channel -> instance mapping BEFORE registering with Peripheral Manager
+    // This ensures the deinit callback can find the instance if triggered
+    res = ll_register_channel_instance( theStrip.stripCfg.led_chan, this );
+    if ( res != ESP_OK ) {
+        log_d( "LiteLED: Failed to register channel instance" );
+        led_strip_free( &theStrip );
+        return res;
+    }
+
     // Register with Peripheral Manager
     if ( !perimanSetPinBus( data_pin, ESP32_BUS_TYPE_RMT_TX, ( void * )theStrip.stripCfg.led_chan, -1, -1 ) ) {
         log_d( "LiteLED: Failed to register GPIO %u with Peripheral Manager", data_pin );
+        ll_unregister_channel_instance( theStrip.stripCfg.led_chan );
         led_strip_free( &theStrip );
         return ESP_ERR_INVALID_STATE;
     }
 
     // Set extra type identifier
     perimanSetPinBusExtraType( data_pin, "LiteLED" );
-
-    // Register channel -> instance mapping for deinit callback
-    res = ll_register_channel_instance( theStrip.stripCfg.led_chan, this );
-    if ( res != ESP_OK ) {
-        log_d( "LiteLED: Failed to register channel instance" );
-        // Clean up Peripheral Manager registration
-        perimanSetPinBus( data_pin, ESP32_BUS_TYPE_INIT, NULL, -1, -1 );
-        led_strip_free( &theStrip );
-        return res;
-    }
 
     valid_instance = true;  // Mark instance as valid
     return ESP_OK;
@@ -241,25 +241,25 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, ll_dma_t dma_flag, ll
         return res;
     }
 
+    // Register channel -> instance mapping BEFORE registering with Peripheral Manager
+    // This ensures the deinit callback can find the instance if triggered
+    res = ll_register_channel_instance( theStrip.stripCfg.led_chan, this );
+    if ( res != ESP_OK ) {
+        log_d( "LiteLED: Failed to register channel instance" );
+        led_strip_free( &theStrip );
+        return res;
+    }
+
     // Register with Peripheral Manager
     if ( !perimanSetPinBus( data_pin, ESP32_BUS_TYPE_RMT_TX, ( void * )theStrip.stripCfg.led_chan, -1, -1 ) ) {
         log_d( "LiteLED: Failed to register GPIO %u with Peripheral Manager", data_pin );
+        ll_unregister_channel_instance( theStrip.stripCfg.led_chan );
         led_strip_free( &theStrip );
         return ESP_ERR_INVALID_STATE;
     }
 
     // Set extra type identifier
     perimanSetPinBusExtraType( data_pin, "LiteLED" );
-
-    // Register channel -> instance mapping for deinit callback
-    res = ll_register_channel_instance( theStrip.stripCfg.led_chan, this );
-    if ( res != ESP_OK ) {
-        log_d( "LiteLED: Failed to register channel instance" );
-        // Clean up Peripheral Manager registration
-        perimanSetPinBus( data_pin, ESP32_BUS_TYPE_INIT, NULL, -1, -1 );
-        led_strip_free( &theStrip );
-        return res;
-    }
 
     valid_instance = true;  // Mark instance as valid
     return ESP_OK;

@@ -57,10 +57,12 @@ esp_err_t ll_registry_init( void ) {
     }
 #endif
 
+    // Set flag BEFORE registering callback to prevent re-entry issues
+    g_ll_periman_initialized = true;
+
     // Register our deinit callback with Peripheral Manager
     perimanSetBusDeinit( ESP32_BUS_TYPE_RMT_TX, ll_periman_deinit_callback );
 
-    g_ll_periman_initialized = true;
     log_d( "LiteLED: Peripheral Manager integration initialized" );
     return ESP_OK;
 }
@@ -69,6 +71,12 @@ esp_err_t ll_registry_init( void ) {
 esp_err_t ll_register_channel_instance( rmt_channel_handle_t channel, LiteLED* instance ) {
     if ( !channel || !instance ) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    // Ensure registry is initialized (registers deinit callback with Peripheral Manager)
+    esp_err_t init_result = ll_registry_init();
+    if ( init_result != ESP_OK ) {
+        return init_result;
     }
 
     CHANNEL_MAP_LOCK();
@@ -179,8 +187,10 @@ bool ll_periman_deinit_callback( void *bus_handle ) {
     // Find the LiteLED instance for this channel
     LiteLED* instance = ll_find_instance_by_channel( channel );
     if ( !instance ) {
+        // Return true to allow periman to proceed - this might be an RMT channel
+        // that wasn't created by LiteLED (e.g., from Arduino's internal RMT usage)
         log_d( "LiteLED: Deinit callback: No LiteLED instance found for RMT channel %p", channel );
-        return false;
+        return true;
     }
 
     // Find which GPIO this channel is assigned to (for logging)
