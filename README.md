@@ -1,6 +1,6 @@
 # LiteLED
 
-## v3.0.0
+## v3.0.1
 
 ## What is it?
 
@@ -124,6 +124,10 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.0.1
+
+- Fix. Improve robustness of Peripheral Manager integration.
 
 ### v3.0.0
 
