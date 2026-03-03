@@ -175,6 +175,54 @@ static const char *col_ord[] = {
 static color_order_t custom_color_order = ORDER_GRB;
 static bool use_custom_color_order = false;
 
+// -------------------------------------------------------------------------
+// PARLIO timing parameters
+// -------------------------------------------------------------------------
+// All supported LED types are driven at 2.5 MHz with 3 samples per bit.
+// Each LED data bit maps to 3 PARLIO clock cycles (400 ns each):
+//
+//   LED bit 0  →  [HIGH, LOW,  LOW ] → T0H = 400 ns, T0L = 800 ns
+//   LED bit 1  →  [HIGH, HIGH, LOW ] → T1H = 800 ns, T1L = 400 ns
+//
+// This satisfies WS2812 / WS2813 / SK6812 / SM16703 timing requirements.
+//
+// APA106 note: the datasheet T0L minimum (1210 ns) is not met at this
+// clock rate (T0L = 800 ns). Works in practice but is an approximation.
+// A future refinement can add per-type clock rates for strict compliance.
+//
+// Reset: 125 zero-bytes × 8 bits × 400 ns = 400 µs LOW — covers all types.
+// -------------------------------------------------------------------------
+
+#ifndef SOC_PARLIO_SUPPORTED
+    #define SOC_PARLIO_SUPPORTED 0
+#endif
+
+#if SOC_PARLIO_SUPPORTED
+
+#define PARLIO_LED_STRIP_CLK_HZ  2500000UL  // 2.5 MHz → 400 ns per PARLIO sample
+#define PARLIO_SAMPLES_PER_BIT   3          // PARLIO clock cycles per LED data bit
+#define PARLIO_BIT0_PATTERN      0x04       // 0b100 : 1 high, 2 low
+#define PARLIO_BIT1_PATTERN      0x06       // 0b110 : 2 high, 1 low
+#define PARLIO_RESET_BYTES       125        // 400 µs low — satisfies all supported LED types
+
+typedef struct {
+    uint32_t      clk_hz;           /* PARLIO output clock frequency (Hz) */
+    uint8_t       samples_per_bit;  /* PARLIO clock cycles per LED protocol data bit */
+    uint8_t       bit0_pattern;     /* Bit pattern for LED data 0 (MSB = first sample out) */
+    uint8_t       bit1_pattern;     /* Bit pattern for LED data 1 (MSB = first sample out) */
+    color_order_t order;            /* LED colour order (shared with RMT led_params) */
+} parlio_led_params_t;
+
+static const parlio_led_params_t parlio_led_params[] = {
+    [ LED_STRIP_WS2812     ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_GRB },
+    [ LED_STRIP_WS2812_RGB ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_RGB },
+    [ LED_STRIP_SK6812     ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_GRB },
+    [ LED_STRIP_APA106     ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_RGB },
+    [ LED_STRIP_SM16703    ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_RGB },
+};
+
+#endif /* SOC_PARLIO_SUPPORTED */
+
 #endif /* __LL_LED_TIMINGS_H__ */
 
 //  --- EOF --- //

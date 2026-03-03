@@ -1,0 +1,5 @@
+# Local development support files — not part of the public library
+support/
+
+# macOS metadata
+.DS_Store

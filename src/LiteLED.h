@@ -27,6 +27,11 @@ static_assert( !( ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL( 2, 0, 3 ) &&
 #endif
 static_assert( SOC_RMT_SUPPORTED, "LiteLED: Use of this library requires an ESP32 with an RMT peripheral." );
 
+// check for PARLIO support (used by LiteLEDpio; not required for LiteLED)
+#ifndef SOC_PARLIO_SUPPORTED
+    #define SOC_PARLIO_SUPPORTED 0
+#endif
+
 // check if the RMT supports DMA
 #ifdef SOC_RMT_SUPPORT_DMA
     #define LL_DMA_SUPPORT SOC_RMT_SUPPORT_DMA
@@ -44,6 +49,9 @@ static_assert( SOC_RMT_SUPPORTED, "LiteLED: Use of this library requires an ESP3
 #endif
 
 #include "driver/rmt_tx.h"
+#if SOC_PARLIO_SUPPORTED
+    #include "driver/parlio_tx.h"
+#endif
 #include "llrgb.h"
 
 // Forward declaration for C linkage
@@ -93,6 +101,15 @@ typedef struct {
     rmt_symbol_word_t led_reset;
     color_order_t order;
 } led_params_t;
+
+// PARLIO hardware configuration (used by LiteLEDpio only)
+#if SOC_PARLIO_SUPPORTED
+typedef struct {
+    parlio_tx_channel_handle_t  parlio_chan;      /* PARLIO TX channel handle */
+    uint8_t                    *parlio_buf;       /* DMA-capable pre-encoded bitstream */
+    size_t                      parlio_buf_bytes; /* size of the encoded bitstream in bytes */
+} parlio_strip_cfg_t;
+#endif
 
 typedef struct {
     uint8_t *buf;
@@ -280,7 +297,81 @@ class LiteLED {
     }
 
 };   // class LiteLED
+// ===========================================================================
+// LiteLEDpio — PARLIO-backed driver, API-compatible with LiteLED
+// Requires an ESP32 with a PARLIO peripheral (SOC_PARLIO_SUPPORTED).
+// Declaration of a LiteLEDpio object on a device without PARLIO support will
+// produce a compile-time error via the static_assert in the constructor.
+// ===========================================================================
+#if SOC_PARLIO_SUPPORTED
 
+class LiteLEDpio {
+  public:
+    // @brief Class constructor. Set the LED parameters for the PARLIO driver.
+    // @param led_type Enumerated value for the type of LEDs in the strip.
+    // @param rgbw     Set true for RGBW type strips.
+    LiteLEDpio( led_strip_type_t led_type, bool rgbw );
+    ~LiteLEDpio();
+
+    // @brief Initialize the strip.
+    // @param data_pin GPIO pin connected to the DIN pin of the strip.
+    // @param length   Number of LEDs in the strip.
+    // @param auto_w   Optional. RGBW strips only. False disables auto W channel.
+    // @return ESP_OK on success.
+    esp_err_t begin( uint8_t data_pin, size_t length, bool auto_w = true );
+
+    // @brief Initialize the strip with pixel-buffer PSRAM option.
+    // @param data_pin   GPIO pin connected to DIN of the strip.
+    // @param length     Number of LEDs in the strip.
+    // @param psram_flag PSRAM usage preference for the LED colour buffer.
+    // @param auto_w     Optional. RGBW strips only.
+    // @return ESP_OK on success.
+    esp_err_t begin( uint8_t data_pin, size_t length, ll_psram_t psram_flag, bool auto_w = true );
+
+    // @brief Encode the LED colour buffer and transmit via PARLIO DMA.
+    esp_err_t show();
+
+    esp_err_t setPixel( size_t num, rgb_t color, bool show = false );
+    esp_err_t setPixel( size_t num, crgb_t color, bool show = false );
+    esp_err_t setPixels( size_t start, size_t len, rgb_t *data, bool show = false );
+    esp_err_t setPixels( size_t start, size_t len, crgb_t *data, bool show = false );
+    esp_err_t fill( rgb_t color, bool show = false );
+    esp_err_t fill( crgb_t color, bool show = false );
+    esp_err_t clear( bool show = false );
+    esp_err_t brightness( uint8_t bright, bool show = false );
+    uint8_t   getBrightness();
+    rgb_t     getPixel( size_t num );
+    crgb_t    getPixelC( size_t num );
+    esp_err_t fillRandom( bool show = false );
+    esp_err_t setOrder( color_order_t led_order = ORDER_GRB );
+    esp_err_t resetOrder();
+
+    bool isValid() const;
+
+    int getGpioPin() const {
+        return theStrip.gpio >= 0 ? ( int )theStrip.gpio : -1;
+    }
+
+    static bool    isGpioAvailable( uint8_t gpio_pin );
+    static uint8_t getActiveInstanceCount();
+
+    void invalidate() {
+        valid_instance = false;
+    }
+
+  private:
+    led_strip_t      theStrip;      // pixel colour buffer and LED metadata
+    parlio_strip_cfg_t parlioCfg;   // PARLIO hardware handles and DMA buffer
+    bool             valid_instance;
+
+    esp_err_t        free();
+
+    inline esp_err_t ll_checkPinState() const {
+        return valid_instance ? ESP_OK : ESP_ERR_INVALID_STATE;
+    }
+};
+
+#endif /* SOC_PARLIO_SUPPORTED */
 #endif /* __LITELED_H__ */
 
 //  --- EOF --- //
