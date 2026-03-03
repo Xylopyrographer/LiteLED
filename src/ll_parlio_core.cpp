@@ -123,25 +123,25 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     log_d( "PARLIO DMA buffer: %u bytes (%u encoded + %u reset, aligned)",
            total_bytes, encoded_bytes, PARLIO_RESET_BYTES );
 
-    // ---- create PARLIO TX channel -----------------------------------------
-    parlio_tx_channel_config_t chan_cfg = {};
-    chan_cfg.clk_src           = PARLIO_CLK_SRC_DEFAULT;
-    chan_cfg.data_width         = 1;
-    chan_cfg.clk_in_gpio_num    = -1;  // no external clock input
-    chan_cfg.clk_out_gpio_num   = -1;  // no clock output (clockless protocol)
-    for ( int i = 0; i < SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH; i++ ) {
-        chan_cfg.data_gpio_nums[ i ] = -1;  // not connected
+    // ---- create PARLIO TX unit -------------------------------------------
+    parlio_tx_unit_config_t chan_cfg = {};
+    chan_cfg.clk_src             = PARLIO_CLK_SRC_DEFAULT;
+    chan_cfg.data_width           = 1;
+    chan_cfg.clk_in_gpio_num      = GPIO_NUM_NC;  // no external clock input
+    chan_cfg.clk_out_gpio_num     = GPIO_NUM_NC;  // no clock output (clockless protocol)
+    for ( int i = 0; i < PARLIO_TX_UNIT_MAX_DATA_WIDTH; i++ ) {
+        chan_cfg.data_gpio_nums[ i ] = GPIO_NUM_NC;  // not connected
     }
-    chan_cfg.data_gpio_nums[ 0 ] = ( int )strip->gpio;
-    chan_cfg.output_clk_freq_hz  = p->clk_hz;
-    chan_cfg.trans_queue_depth   = 4;
-    chan_cfg.max_transfer_size   = total_bytes;
-    chan_cfg.idle_value          = 0;   // data line LOW when idle
-    chan_cfg.flags.clk_gate_en   = false;
+    chan_cfg.data_gpio_nums[ 0 ]  = ( gpio_num_t )strip->gpio;
+    chan_cfg.output_clk_freq_hz   = p->clk_hz;
+    chan_cfg.trans_queue_depth    = 4;
+    chan_cfg.max_transfer_size    = total_bytes;
+    // idle_value is now set per-transmit in parlio_transmit_config_t
+    chan_cfg.flags.clk_gate_en    = false;
 
-    esp_err_t res = parlio_new_tx_channel( &chan_cfg, &cfg->parlio_chan );
+    esp_err_t res = parlio_new_tx_unit( &chan_cfg, &cfg->parlio_chan );
     if ( res != ESP_OK ) {
-        log_d( "parlio_strip_install: parlio_new_tx_channel() failed - %s", esp_err_to_name( res ) );
+        log_d( "parlio_strip_install: parlio_new_tx_unit() failed - %s", esp_err_to_name( res ) );
         heap_caps_free( cfg->parlio_buf );
         cfg->parlio_buf = NULL;
         free( strip->buf );
@@ -149,9 +149,9 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
         return res;
     }
 
-    if ( ( res = parlio_tx_channel_enable( cfg->parlio_chan ) ) != ESP_OK ) {
-        log_d( "parlio_strip_install: parlio_tx_channel_enable() failed - %s", esp_err_to_name( res ) );
-        parlio_del_tx_channel( cfg->parlio_chan );
+    if ( ( res = parlio_tx_unit_enable( cfg->parlio_chan ) ) != ESP_OK ) {
+        log_d( "parlio_strip_install: parlio_tx_unit_enable() failed - %s", esp_err_to_name( res ) );
+        parlio_del_tx_unit( cfg->parlio_chan );
         cfg->parlio_chan = NULL;
         heap_caps_free( cfg->parlio_buf );
         cfg->parlio_buf = NULL;
@@ -180,15 +180,15 @@ esp_err_t parlio_strip_free( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     esp_err_t res;
 
     // Wait for any in-progress DMA transfer (including reset period)
-    if ( ( res = parlio_tx_channel_wait_all_done( cfg->parlio_chan, -1 ) ) != ESP_OK ) {
+    if ( ( res = parlio_tx_unit_wait_all_done( cfg->parlio_chan, -1 ) ) != ESP_OK ) {
         log_d( "parlio_strip_free: wait_all_done failed - %s", esp_err_to_name( res ) );
         return res;
     }
-    if ( ( res = parlio_tx_channel_disable( cfg->parlio_chan ) ) != ESP_OK ) {
+    if ( ( res = parlio_tx_unit_disable( cfg->parlio_chan ) ) != ESP_OK ) {
         log_d( "parlio_strip_free: disable failed - %s", esp_err_to_name( res ) );
         return res;
     }
-    if ( ( res = parlio_del_tx_channel( cfg->parlio_chan ) ) != ESP_OK ) {
+    if ( ( res = parlio_del_tx_unit( cfg->parlio_chan ) ) != ESP_OK ) {
         log_d( "parlio_strip_free: delete failed - %s", esp_err_to_name( res ) );
         return res;
     }
@@ -230,17 +230,17 @@ esp_err_t parlio_strip_flush( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     // Transmit bitstream (pixel data + reset) via DMA.
     // total_bytes includes PARLIO_RESET_BYTES of trailing zeros.
     parlio_transmit_config_t tx_cfg = { .idle_value = 0 };
-    esp_err_t res = parlio_tx_channel_send_frame( cfg->parlio_chan,
+    esp_err_t res = parlio_tx_unit_transmit( cfg->parlio_chan,
                     cfg->parlio_buf,
                     cfg->parlio_buf_bytes * 8,
                     &tx_cfg );
     if ( res != ESP_OK ) {
-        log_d( "parlio_strip_flush: send_frame failed - %s", esp_err_to_name( res ) );
+        log_d( "parlio_strip_flush: transmit failed - %s", esp_err_to_name( res ) );
         return res;
     }
 
     // Block until the full frame (including the reset period) is done.
-    if ( ( res = parlio_tx_channel_wait_all_done( cfg->parlio_chan, -1 ) ) != ESP_OK ) {
+    if ( ( res = parlio_tx_unit_wait_all_done( cfg->parlio_chan, -1 ) ) != ESP_OK ) {
         log_d( "parlio_strip_flush: wait_all_done failed - %s", esp_err_to_name( res ) );
     }
     return res;

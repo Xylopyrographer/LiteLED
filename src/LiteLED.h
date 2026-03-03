@@ -105,7 +105,7 @@ typedef struct {
 // PARLIO hardware configuration (used by LiteLEDpio only)
 #if SOC_PARLIO_SUPPORTED
 typedef struct {
-    parlio_tx_channel_handle_t  parlio_chan;      /* PARLIO TX channel handle */
+    parlio_tx_unit_handle_t     parlio_chan;      /* PARLIO TX unit handle */
     uint8_t                    *parlio_buf;       /* DMA-capable pre-encoded bitstream */
     size_t                      parlio_buf_bytes; /* size of the encoded bitstream in bytes */
 } parlio_strip_cfg_t;

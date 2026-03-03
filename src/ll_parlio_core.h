@@ -26,11 +26,15 @@
 #ifndef __LL_PARLIO_CORE_H__
     #define __LL_PARLIO_CORE_H__
 
-    #if SOC_PARLIO_SUPPORTED
+    // Include LiteLED.h unconditionally so that soc_caps.h is brought into scope
+    // (via Arduino.h) and SOC_PARLIO_SUPPORTED is resolved BEFORE the #if check
+    // below.  Without this, ll_parlio_core.cpp sees SOC_PARLIO_SUPPORTED=0 when
+    // this is its first include, and the entire implementation compiles to nothing.
+    #include "LiteLED.h"
+    #include "ll_led_timings.h"
+    #include "esp32-hal-log.h"
 
-        #include "LiteLED.h"
-        #include "ll_led_timings.h"
-        #include "esp32-hal-log.h"
+    #if SOC_PARLIO_SUPPORTED
 
         // -------------------------------------------------------------------------
         // Function declarations
