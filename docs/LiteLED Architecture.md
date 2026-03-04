@@ -9,13 +9,16 @@ LiteLED starting with v3.0.0 uses a modular architecture to separate concerns an
 ## Module Hierarchy and Dependencies
 
 ```
-LiteLED.h (Main Public API)
-    ├─> llrmt.h (Compatibility Header - includes all low-level modules)
-    │   ├─> ll_led_timings.h (LED Timing Constants)
-    │   ├─> ll_priority.h/.cpp (Priority Management)
+LiteLED.h (Main Public API — RMT and PARLIO drivers)
+    ├─> llrmt.h (RMT Compatibility Header)
+    │   ├─> ll_led_timings.h (LED Timing Constants — RMT + PARLIO tables)
+    │   ├─> ll_priority.h/.cpp (RMT Priority Management)
     │   ├─> ll_encoder.h/.cpp (RMT Encoder Callback)
-    │   ├─> ll_strip_core.h/.cpp (Core Strip Operations)
-    │   └─> ll_strip_pixels.h/.cpp (Pixel Manipulation)
+    │   ├─> ll_strip_core.h/.cpp (RMT Core Operations)
+    │   └─> ll_strip_pixels.h/.cpp (Shared Pixel Manipulation)
+    ├─> llparlio.h (PARLIO Compatibility Header — SOC_PARLIO_SUPPORTED only)
+    │   ├─> ll_led_timings.h (shared — PARLIO timing table)
+    │   └─> ll_parlio_core.h/.cpp (PARLIO Core Operations)
     ├─> ll_registry.h/.cpp (Minimal Instance Tracking)
     ├─> esp32-hal-periman.h (ESP32 Peripheral Manager - Direct GPIO Management)
     └─> llrgb.h (RGB Color Utilities)
@@ -48,27 +51,27 @@ LiteLED.h (Main Public API)
 
 ---
 
-### `llrmt.h` (Compatibility Header)
+### `llrmt.h` (RMT Compatibility Header)
 
 **Purpose:** Single include point for all low-level RMT modules
 
 **Responsibilities:**
 
-- Includes all five modular headers in correct order
+- Includes all five RMT modular headers in correct order
 - Maintains backward compatibility with existing code
-- Acts as the abstraction layer between high-level API and implementation
+- Acts as the abstraction layer between high-level API and RMT implementation
 
 **Contents:**
 
 ```cpp
-#include "ll_led_timings.h"   // Timing constants
+#include "ll_led_timings.h"   // Timing constants (RMT + PARLIO)
 #include "ll_priority.h"       // Priority management
 #include "ll_encoder.h"        // Encoder callback
 #include "ll_strip_core.h"     // Core operations
-#include "ll_strip_pixels.h"   // Pixel operations
+#include "ll_strip_pixels.h"   // Pixel operations (shared)
 ```
 
-**Relationship:** Central hub that aggregates all low-level functionality.
+**Relationship:** Central hub that aggregates all RMT low-level functionality.
 
 ---
 
@@ -308,6 +311,107 @@ void led_strip_set_color_order(color_order_t order);
 
 ---
 
+## PARLIO Modules
+
+The following modules implement the PARLIO-based `LiteLEDpio` driver.  All are
+guarded by `#if SOC_PARLIO_SUPPORTED` so they compile only on SoCs that have the
+PARLIO peripheral (e.g., ESP32-C6, ESP32-H2).
+
+---
+
+### `llparlio.h` (PARLIO Compatibility Header)
+
+**Purpose:** Single include point for all PARLIO low-level modules — mirrors `llrmt.h`
+
+**Responsibilities:**
+
+- Emits `#error` if included on a target without `SOC_PARLIO_SUPPORTED`
+- Includes timing and core headers in correct order
+
+**Contents:**
+
+```cpp
+#include "ll_led_timings.h"   // Shared timing constants (PARLIO table)
+#include "ll_parlio_core.h"   // PARLIO lifecycle functions
+```
+
+**Relationship:** Included by `LiteLED.h` (conditionally) and by `LiteLEDpio.cpp`.
+
+---
+
+### `ll_parlio_core.h` / `ll_parlio_core.cpp`
+
+**Purpose:** PARLIO strip lifecycle management — equivalent to `ll_strip_core` for RMT
+
+**Responsibilities:**
+
+- PARLIO TX unit allocation and configuration
+- DMA bitstream buffer allocation (must be internal DMA-capable RAM)
+- Pixel colour buffer allocation (PSRAM-aware, matches RMT behaviour)
+- Brightness-scaled encoding of pixel data into the DMA buffer
+- Transmit, block-until-done, and cleanup
+
+**Key Functions:**
+
+```cpp
+esp_err_t parlio_strip_init   (led_strip_t *strip, parlio_strip_cfg_t *cfg);
+esp_err_t parlio_strip_install(led_strip_t *strip, parlio_strip_cfg_t *cfg);
+esp_err_t parlio_strip_flush  (led_strip_t *strip, parlio_strip_cfg_t *cfg);
+esp_err_t parlio_strip_free   (led_strip_t *strip, parlio_strip_cfg_t *cfg);
+void      parlio_strip_debug_dump(led_strip_t *strip, parlio_strip_cfg_t *cfg);
+```
+
+**Encoding (`data_width=8`):**
+
+Each input byte is expanded to 24 DMA bytes (3 bytes per bit, 8 bits per byte).
+Only `data_gpio_nums[0]` (bit 0) is wired to the LED strip; bits 1–7 are
+routed to `GPIO_NUM_NC`, so no bit-packing or DMA endianness issues arise.
+
+```
+LED bit 0  →  DMA bytes: 0x01 0x00 0x00  (T0H=400 ns, T0L=800 ns)
+LED bit 1  →  DMA bytes: 0x01 0x01 0x00  (T1H=800 ns, T1L=400 ns)
+```
+
+The internal `parlio_encode_byte()` is `IRAM_ATTR`-qualified.
+
+**Supported hardware:** ESP32-C6 (1 PARLIO TX unit, up to 16 data lines).
+The ESP32-C6 PARLIO TX unit has `SOC_PARLIO_TX_UNITS_PER_GROUP = 1`, meaning
+only one `LiteLEDpio` instance can be active at a time.  Combine with `LiteLED`
+(RMT, up to 2 TX channels on C6) for multi-strip applications.
+
+**Dependencies:**
+
+- `ll_led_timings.h` (PARLIO timing table)
+- `llrgb.h` (`scale8_video()` for brightness)
+- `LiteLED.h` (`led_strip_t`, `parlio_strip_cfg_t`)
+- ESP-IDF `driver/parlio_tx.h`
+
+---
+
+### `LiteLEDpio.cpp`
+
+**Purpose:** `LiteLEDpio` class implementation — PARLIO equivalent of `LiteLED.cpp`
+
+**Responsibilities:**
+
+- Implements all public methods with identical signatures to `LiteLED`
+- Delegates pixel operations to the shared `ll_strip_pixels` layer
+- Manages `parlio_strip_cfg_t` state (DMA buffer, channel handle)
+- Registers/unregisters the GPIO with the ESP32 Peripheral Manager
+
+**Public API:** Identical to `LiteLED` — same method names, parameter types, and
+return types.  User code can switch between RMT and PARLIO drivers by changing
+one type declaration.
+
+**Limitations vs `LiteLED`:**
+
+- No DMA flag (`DMA_ON`/`DMA_OFF`): PARLIO always uses DMA internally
+- No interrupt priority setting: no ISR callback in the PARLIO path
+- `getActiveInstanceCount()` reflects Peripheral Manager registration only
+- Only one instance active at a time on ESP32-C6
+
+---
+
 ## Supporting Modules
 
 ### `ll_registry.h` / `ll_registry.cpp`
@@ -412,7 +516,7 @@ User Code
       └─> Register channel mapping [ll_register_channel_instance]
 ```
 
-### Pixel Update Flow
+### Pixel Update Flow (RMT)
 
 ```
 User Code
@@ -431,7 +535,25 @@ User Code
                   └─> Write RMT symbols
 ```
 
-### Cleanup Flow
+### Pixel Update Flow (PARLIO)
+
+```
+User Code
+  └─> LiteLEDpio::setPixel(n, r, g, b)
+      └─> led_strip_set_pixel() [ll_strip_pixels]   ← same shared layer
+          ├─> Translate color order [ll_led_timings]
+          ├─> Calculate buffer offset
+          └─> Write RGB to buffer
+  └─> LiteLEDpio::show()
+      └─> parlio_strip_flush() [ll_parlio_core]
+          ├─> For each pixel byte:
+          │   ├─> scale8_video() [llrgb]
+          │   └─> parlio_encode_byte() → 24 DMA bytes
+          └─> parlio_tx_unit_transmit() (ESP-IDF DMA)
+              └─> parlio_tx_unit_wait_all_done() (blocking)
+```
+
+### Cleanup Flow (RMT)
 
 ```
 User Code
@@ -444,22 +566,39 @@ User Code
           ├─> Mark priority free [ll_priority]
           └─> Free LED buffer
 ```
+
+### Cleanup Flow (PARLIO)
+
+```
+User Code
+  └─> LiteLEDpio::~LiteLEDpio()
+      ├─> Unregister from Peripheral Manager [perimanSetPinBus]
+      └─> parlio_strip_free() [ll_parlio_core]
+          ├─> parlio_tx_unit_wait_all_done()
+          ├─> parlio_tx_unit_disable()
+          ├─> parlio_del_tx_unit()
+          ├─> Free DMA bitstream buffer
+          └─> Free pixel colour buffer
+```
 ---
 
 ## Module Interaction Summary
 
 | Module | Calls | Called By | Key Responsibility |
 |--------|-------|-----------|-------------------|
-| `LiteLED` | All modules, Peripheral Manager | User code | Public API |
-| `llrmt` | All ll_* modules | `LiteLED` | Module aggregation |
-| `ll_led_timings` | None | `ll_encoder`, `ll_strip_pixels` | Data provider |
-| `ll_priority` | None | `ll_strip_core` | Priority tracking |
-| `ll_encoder` | `llrgb`, `ll_led_timings` | ESP-IDF RMT (interrupt) | Data encoding |
-| `ll_strip_core` | `ll_priority`, `ll_encoder` | `LiteLED` | Lifecycle management |
-| `ll_strip_pixels` | `ll_led_timings` | `LiteLED` | Pixel operations |
-| `ll_registry` | Peripheral Manager | `LiteLED` | Minimal instance tracking |
-| `Peripheral Manager` | None | `LiteLED`, `ll_registry` | GPIO conflict prevention |
-| `llrgb` | None | `ll_encoder`, User code | Color math |
+| `LiteLED` | All RMT modules, Peripheral Manager | User code | RMT public API |
+| `LiteLEDpio` | PARLIO modules, `ll_strip_pixels`, Peripheral Manager | User code | PARLIO public API |
+| `llrmt` | All ll_* RMT modules | `LiteLED` | RMT module aggregation |
+| `llparlio` | `ll_led_timings`, `ll_parlio_core` | `LiteLEDpio` | PARLIO module aggregation |
+| `ll_led_timings` | None | `ll_encoder`, `ll_strip_pixels`, `ll_parlio_core` | Data provider (RMT + PARLIO) |
+| `ll_priority` | None | `ll_strip_core` | RMT priority tracking |
+| `ll_encoder` | `llrgb`, `ll_led_timings` | ESP-IDF RMT (interrupt) | RMT data encoding |
+| `ll_strip_core` | `ll_priority`, `ll_encoder` | `LiteLED` | RMT lifecycle management |
+| `ll_parlio_core` | `llrgb`, `ll_led_timings` | `LiteLEDpio` | PARLIO lifecycle + DMA encoding |
+| `ll_strip_pixels` | `ll_led_timings` | `LiteLED`, `LiteLEDpio` | Shared pixel operations |
+| `ll_registry` | Peripheral Manager | `LiteLED` | Minimal RMT instance tracking |
+| `Peripheral Manager` | None | `LiteLED`, `LiteLEDpio`, `ll_registry` | GPIO conflict prevention |
+| `llrgb` | None | `ll_encoder`, `ll_parlio_core`, User code | Color math |
 
 ---
 
@@ -514,6 +653,13 @@ Modules depend only on what they need:
 ---
 
 ## Version History
+
+**v3.1.0** *(pending release)*
+- Added PARLIO driver (`LiteLEDpio`) targeting ESP32-C6 and other PARLIO-capable SoCs
+- New files: `LiteLEDpio.cpp`, `ll_parlio_core.h`, `ll_parlio_core.cpp`, `llparlio.h`
+- Modified: `LiteLED.h` (added `parlio_strip_cfg_t`, `LiteLEDpio` class), `ll_led_timings.h` (added PARLIO timing table)
+- Encoding uses `data_width=8` to avoid DMA endianness corruption present with `data_width=1`
+- All PARLIO code guarded by `#if SOC_PARLIO_SUPPORTED` for safe multi-target builds
 
 **v3.0.0**
 - Initial release for library version 3.0.0

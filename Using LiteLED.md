@@ -8,6 +8,7 @@
   - [Regarding RGBW Strips](#regarding-rgbw-strips)
 - [Classes and Types](#classes-and-types)
   - [LiteLED Class](#liteled-class)
+  - [LiteLEDpio Class](#liteLEDpio-class)
 - [Enumerations](#enumerations)
   - [`led_strip_type_t`](#led_strip_type_t)
   - [`color_order_t`](#color_order_t)
@@ -263,6 +264,71 @@ public:
 ```
 
 If you're curious about how the library is structured, take a look at the `LiteLED Architecture.md` file in the `docs` folder of the [library repository](https://github.com/Xylopyrographer/LiteLED).
+
+---
+
+## LiteLEDpio Class
+
+API-compatible alternative to `LiteLED` that drives LED strips via the **PARLIO** (Parallel IO) peripheral instead of RMT.
+
+**Availability:** Only compiled and available on SoCs that define `SOC_PARLIO_SUPPORTED` (e.g., ESP32-C6, ESP32-H2). The class declaration is wrapped in `#if SOC_PARLIO_SUPPORTED`.
+
+**Hardware limits on ESP32-C6:** Only one `LiteLEDpio` instance can be active at a time (`SOC_PARLIO_TX_UNITS_PER_GROUP = 1`). Combine with `LiteLED` (up to 2 RMT TX channels on C6) for multi-strip applications.
+
+```cpp
+class LiteLEDpio {
+public:
+    // Constructor — identical to LiteLED
+    LiteLEDpio(led_strip_type_t led_type, bool rgbw);
+    ~LiteLEDpio();
+
+    // Initialization — no DMA flag or interrupt priority (PARLIO uses DMA internally)
+    esp_err_t begin(uint8_t data_pin, size_t length, bool auto_w = true);
+    esp_err_t begin(uint8_t data_pin, size_t length, ll_psram_t psram_flag, bool auto_w = true);
+
+    // All display, pixel, colour order, and instance management methods are
+    // identical in name, parameters, and return type to LiteLED.
+    esp_err_t show();
+    esp_err_t clear(bool show = false);
+    esp_err_t brightness(uint8_t bright, bool show = false);
+    uint8_t   getBrightness();
+    esp_err_t setPixel(size_t num, rgb_t color, bool show = false);
+    esp_err_t setPixel(size_t num, crgb_t color, bool show = false);
+    esp_err_t setPixels(size_t start, size_t len, rgb_t *data, bool show = false);
+    esp_err_t setPixels(size_t start, size_t len, crgb_t *data, bool show = false);
+    esp_err_t fill(rgb_t color, bool show = false);
+    esp_err_t fill(crgb_t color, bool show = false);
+    esp_err_t fillRandom(bool show = false);
+    rgb_t     getPixel(size_t num);
+    crgb_t    getPixelC(size_t num);
+    esp_err_t setOrder(color_order_t led_order = ORDER_GRB);
+    esp_err_t resetOrder();
+    bool      isValid() const;
+    int       getGpioPin() const;
+    static bool    isGpioAvailable(uint8_t gpio_pin);
+    static uint8_t getActiveInstanceCount();
+};
+```
+
+**Switching between drivers** is a one-line change:
+
+```cpp
+// RMT driver
+LiteLED    myStrip(LED_STRIP_WS2812, false);
+
+// PARLIO driver — same API, same begin/show/setPixel calls
+LiteLEDpio myStrip(LED_STRIP_WS2812, false);
+```
+
+**Differences from `LiteLED`:**
+
+| Feature | `LiteLED` (RMT) | `LiteLEDpio` (PARLIO) |
+|---|---|---|
+| `begin()` full config | `begin(pin, len, dma, priority, psram)` | `begin(pin, len, psram)` |
+| DMA control | `DMA_ON` / `DMA_OFF` | Always uses DMA internally |
+| Interrupt priority | `PRIORITY_HIGH` etc. | Not applicable (no ISR) |
+| Max concurrent instances | Up to 8 (RMT channels) | 1 on ESP32-C6 |
+| SoC availability | All ESP32 with RMT | `SOC_PARLIO_SUPPORTED` only |
 
 ---
 
@@ -2188,6 +2254,12 @@ void loop() {
 ---
 
 # Version History
+
+**v3.1.0** *(pending release)*
+- Added `LiteLEDpio` class: PARLIO-backed LED strip driver for ESP32-C6 and other `SOC_PARLIO_SUPPORTED` SoCs
+- API-identical to `LiteLED`; switch drivers by changing one type declaration
+- `begin()` accepts `(pin, length)` and `(pin, length, psram_flag)` overloads — no DMA or priority flags
+- Only one `LiteLEDpio` instance active at a time on ESP32-C6; combine with `LiteLED` (RMT) for multi-strip use
 
 **v3.0.0**
 - Initial release for LiteLED library version 3.0.0.
