@@ -199,11 +199,15 @@ static bool use_custom_color_order = false;
 
 #if SOC_PARLIO_SUPPORTED
 
-#define PARLIO_LED_STRIP_CLK_HZ  2500000UL  // 2.5 MHz → 400 ns per PARLIO sample
+#define PARLIO_LED_STRIP_CLK_HZ  2500000UL  // 2.5 MHz → 400 ns per PARLIO clock
 #define PARLIO_SAMPLES_PER_BIT   3          // PARLIO clock cycles per LED data bit
-#define PARLIO_BIT0_PATTERN      0x04       // 0b100 : 1 high, 2 low
-#define PARLIO_BIT1_PATTERN      0x06       // 0b110 : 2 high, 1 low
-#define PARLIO_RESET_BYTES       125        // 400 µs low — satisfies all supported LED types
+#define PARLIO_BIT0_PATTERN      0x04       // 0b100 : clocks high, low,  low
+#define PARLIO_BIT1_PATTERN      0x06       // 0b110 : clocks high, high, low
+// data_width=8: each DMA byte = 1 PARLIO clock = 400 ns.
+// Each LED data bit expands to (PARLIO_SAMPLES_PER_BIT * 8) = 24 DMA bytes.
+// Reset: 1000 zero-bytes × 400 ns = 400 µs LOW, satisfies all supported LED types.
+#define PARLIO_BYTES_PER_BIT     ( PARLIO_SAMPLES_PER_BIT * 8 )   // 24 DMA bytes per LED bit
+#define PARLIO_RESET_BYTES       1000
 
 typedef struct {
     uint32_t      clk_hz;           /* PARLIO output clock frequency (Hz) */

@@ -27,31 +27,30 @@
 #define PIO_PIXEL_SIZE( strip ) ( PIO_COLOR_SIZE( strip ) * (strip)->length )
 
 // -------------------------------------------------------------------------
-// Internal: encode one LED colour byte to PARLIO_SAMPLES_PER_BIT output bytes.
+// Internal: encode one LED colour byte → PARLIO_BYTES_PER_BIT * 8 = 24 DMA bytes.
 //
-// Each of the 8 input bits is expanded to 3 PARLIO clock cycles packed MSB-
-// first.  For 3 SPB the output is always exactly 3 bytes:
+// data_width=8: each DMA byte = 1 PARLIO clock across all 8 lines.
+// Only data_gpio_nums[0] (bit 0) is wired to the LED strip:
+//   0x01 = bit0 HIGH = LED data high
+//   0x00 = bit0 LOW  = LED data low
 //
-//   bit value 0  →  0b100  (sample pattern: HIGH LOW  LOW )
-//   bit value 1  →  0b110  (sample pattern: HIGH HIGH LOW )
+// Each of the 8 input bits → 3 DMA bytes using the 3-bit sample pattern:
+//   bit-0 (0b100): 0x01 0x00 0x00  (T0H=400ns, T0L=800ns)
+//   bit-1 (0b110): 0x01 0x01 0x00  (T1H=800ns, T1L=400ns)
 //
-// Example (input 0xFF, all bits 1):
-//   24-bit stream:  110 110 110 110 110 110 110 110
-//   output bytes:   0xDB  0x6D  0xB6
+// No bit-packing, no DMA endianness issue.
 // -------------------------------------------------------------------------
 static IRAM_ATTR void parlio_encode_byte( uint8_t b,
         uint8_t bit0_pat,
         uint8_t bit1_pat,
         uint8_t *out ) {
-    uint32_t expanded = 0;
     for ( int i = 7; i >= 0; i-- ) {
-        expanded = ( expanded << PARLIO_SAMPLES_PER_BIT )
-                   | ( ( ( b >> i ) & 1 ) ? ( uint32_t )bit1_pat
-                       : ( uint32_t )bit0_pat );
+        uint8_t pat = ( ( b >> i ) & 1 ) ? bit1_pat : bit0_pat;
+        // expand 3-bit sample pattern, each bit → one full DMA byte on bit0
+        *out++ = ( pat >> 2 ) & 1;  // sample 0 (MSB of pattern)
+        *out++ = ( pat >> 1 ) & 1;  // sample 1
+        *out++ =   pat        & 1;  // sample 2 (LSB of pattern)
     }
-    out[ 0 ] = ( expanded >> 16 ) & 0xFF;
-    out[ 1 ] = ( expanded >>  8 ) & 0xFF;
-    out[ 2 ] =   expanded         & 0xFF;
 }
 
 // -------------------------------------------------------------------------
@@ -107,8 +106,9 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
 
     // ---- allocate DMA bitstream buffer (must be internal DMA-capable RAM) -
     const parlio_led_params_t *p = &parlio_led_params[ strip->type ];
-    size_t encoded_bytes  = pixel_bytes   * p->samples_per_bit;  // 3× pixel data
-    size_t total_bytes    = encoded_bytes  + PARLIO_RESET_BYTES;  // + 400 µs LOW
+    // data_width=8: each input byte expands to (samples_per_bit × 8) = 24 DMA bytes
+    size_t encoded_bytes  = pixel_bytes * p->samples_per_bit * 8;
+    size_t total_bytes    = encoded_bytes + PARLIO_RESET_BYTES;  // + 400 µs LOW
     total_bytes           = ( total_bytes + 3 ) & ~( size_t )3;  // 4-byte aligned
 
     cfg->parlio_buf = ( uint8_t* )heap_caps_calloc( 1, total_bytes,
@@ -126,9 +126,10 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     // ---- create PARLIO TX unit -------------------------------------------
     parlio_tx_unit_config_t chan_cfg = {};
     chan_cfg.clk_src             = PARLIO_CLK_SRC_DEFAULT;
-    chan_cfg.data_width           = 1;
+    chan_cfg.data_width           = 8;    // 1 byte = 1 clock; bit0 = LED data pin
     chan_cfg.clk_in_gpio_num      = GPIO_NUM_NC;  // no external clock input
     chan_cfg.clk_out_gpio_num     = GPIO_NUM_NC;  // no clock output (clockless protocol)
+    chan_cfg.valid_gpio_num       = GPIO_NUM_NC;  // no valid signal output
     for ( int i = 0; i < PARLIO_TX_UNIT_MAX_DATA_WIDTH; i++ ) {
         chan_cfg.data_gpio_nums[ i ] = GPIO_NUM_NC;  // not connected
     }
@@ -136,7 +137,8 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     chan_cfg.output_clk_freq_hz   = p->clk_hz;
     chan_cfg.trans_queue_depth    = 4;
     chan_cfg.max_transfer_size    = total_bytes;
-    // idle_value is now set per-transmit in parlio_transmit_config_t
+    // No bit_pack_order setting needed for data_width=8 (no packing occurs)
+    // idle_value is set per-transmit in parlio_transmit_config_t
     chan_cfg.flags.clk_gate_en    = false;
 
     esp_err_t res = parlio_new_tx_unit( &chan_cfg, &cfg->parlio_chan );
@@ -224,7 +226,7 @@ esp_err_t parlio_strip_flush( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     for ( size_t i = 0; i < pixel_bytes; i++ ) {
         parlio_encode_byte( scale8_video( strip->buf[ i ], brightness ),
                             p->bit0_pattern, p->bit1_pattern,
-                            &out[ i * p->samples_per_bit ] );
+                            &out[ i * p->samples_per_bit * 8 ] );
     }
 
     // Transmit bitstream (pixel data + reset) via DMA.
