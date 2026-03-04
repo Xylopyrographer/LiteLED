@@ -275,14 +275,91 @@ API-compatible alternative to `LiteLED` that drives LED strips via the **PARLIO*
 
 **Hardware limits on ESP32-C6:** Only one `LiteLEDpio` instance can be active at a time (`SOC_PARLIO_TX_UNITS_PER_GROUP = 1`). Combine with `LiteLED` (up to 2 RMT TX channels on C6) for multi-strip applications.
 
+### Constructor
+
+```cpp
+LiteLEDpio(led_strip_type_t led_type, bool rgbw);
+```
+
+Sets the strip type and colour format. No hardware is allocated until `begin()` is called.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `led_type` | `led_strip_type_t` | LED strip protocol (e.g., `LED_STRIP_WS2812`) |
+| `rgbw` | `bool` | `true` for RGBW strips (e.g., SK6812 RGBW); `false` for RGB strips |
+
+### Destructor
+
+```cpp
+~LiteLEDpio();
+```
+
+Waits for any in-progress GDMA transfer to complete, disables and deletes the PARLIO TX unit, and frees both the pixel colour buffer and the DMA bitstream buffer. Safe to call even if `begin()` was never called or failed.
+
+### Initialization
+
+#### `begin(data_pin, length)`
+
+```cpp
+esp_err_t begin(uint8_t data_pin, size_t length, bool auto_w = true);
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data_pin` | `uint8_t` | — | GPIO pin connected to the strip DIN |
+| `length` | `size_t` | — | Number of LEDs in the strip |
+| `auto_w` | `bool` | `true` | RGBW strips only: `true` derives the W channel automatically from R/G/B values; `false` leaves W at 0 |
+
+Allocates the pixel colour buffer in internal RAM, allocates the DMA bitstream buffer in internal DMA-capable RAM, creates and enables the PARLIO TX unit. Returns `ESP_OK` on success, or an `esp_err_t` error code if the GPIO is already in use or allocation fails.
+
+#### `begin(data_pin, length, psram_flag)`
+
+```cpp
+esp_err_t begin(uint8_t data_pin, size_t length, ll_psram_t psram_flag, bool auto_w = true);
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data_pin` | `uint8_t` | — | GPIO pin connected to the strip DIN |
+| `length` | `size_t` | — | Number of LEDs in the strip |
+| `psram_flag` | `ll_psram_t` | — | PSRAM preference for the pixel colour buffer (`PSRAM_ENABLE`, `PSRAM_DISABLE`, or `PSRAM_AUTO`) |
+| `auto_w` | `bool` | `true` | RGBW strips only: see above |
+
+**PSRAM and DMA buffer allocation**
+
+The `psram_flag` controls allocation of the **pixel colour buffer** only. For large LED arrays (hundreds to thousands of LEDs), placing the colour buffer in PSRAM avoids consuming significant internal SRAM.
+
+Regardless of `psram_flag`, the **DMA bitstream buffer** is always allocated from internal DMA-capable RAM (`MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL`). GDMA on C6/H2 cannot read PSRAM. The DMA buffer is approximately 87 bytes per LED (24 DMA bytes × 3 colour channels, plus reset padding); for 64 LEDs this is ~5.6 KB, for 144 LEDs ~12.4 KB.
+
+#### DMA flag and interrupt priority — not applicable
+
+`LiteLEDpio` exposes **no** `dma_flag` or `priority` parameters. The PARLIO peripheral transfers data exclusively via GDMA — DMA is always on and cannot be disabled. Because no CPU ISR is involved in the transmission, interrupt priority configuration has no meaning for `LiteLEDpio`.
+
+The three-parameter overload `begin(pin, len, dma_flag, priority, psram_flag)` available on `LiteLED` (RMT) does not exist on `LiteLEDpio`. Attempting to pass `DMA_ON`, `DMA_OFF`, or any `ll_priority_t` value to a `LiteLEDpio` initializer will result in a compile error.
+
+### RGBW Support
+
+`LiteLEDpio` supports RGBW LED types (e.g., `LED_STRIP_SK6812`) identically to `LiteLED`. Pass `true` for the `rgbw` constructor argument and select an RGBW-capable `led_strip_type_t`. The `auto_w` parameter in `begin()` behaves the same as for `LiteLED` — see [Regarding RGBW Strips](#regarding-rgbw-strips).
+
+The PARLIO encoder handles 4-byte-per-pixel RGBW strips correctly: each input byte is independently encoded to 24 DMA bytes, so each RGBW LED produces 4 × 24 = 96 DMA bytes.
+
+### Driving Multiple Strips in Parallel
+
+The PARLIO peripheral includes up to 8 data output lines (`data_gpio_nums[0..7]`) that all carry the **same bitstream simultaneously**. This is a fundamental hardware property: all active output lines always see identical data, and there is no way to send different data to different pins within one PARLIO TX unit.
+
+Because all output lines share one bitstream, up to 8 LED strips can be driven concurrently from a single `LiteLEDpio` instance — all strips receive identical colour data with perfectly synchronised timing.
+
+> **Current implementation note:** The current `LiteLEDpio` implementation uses `data_width=8` and encodes with DMA byte values `0x01` (logic HIGH on bit 0 only) and `0x00` (all bits LOW). Only bit 0 of each DMA byte carries the LED signal, so only the GPIO assigned to `data_gpio_nums[0]` (the `data_pin` passed to `begin()`) outputs a valid waveform; `data_gpio_nums[1..7]` are `GPIO_NUM_NC`. To use the parallel output feature the DMA encoding must use `0xFF`/`0x00` bytes so all 8 output lines carry the same signal, and additional GPIO pins assigned to `data_gpio_nums[1..7]`. This is a planned enhancement.
+
+### Class Interface
+
 ```cpp
 class LiteLEDpio {
 public:
-    // Constructor — identical to LiteLED
     LiteLEDpio(led_strip_type_t led_type, bool rgbw);
     ~LiteLEDpio();
 
-    // Initialization — no DMA flag or interrupt priority (PARLIO uses DMA internally)
+    // Initialization — no DMA flag or interrupt priority (PARLIO always uses GDMA; no ISR)
     esp_err_t begin(uint8_t data_pin, size_t length, bool auto_w = true);
     esp_err_t begin(uint8_t data_pin, size_t length, ll_psram_t psram_flag, bool auto_w = true);
 
@@ -325,9 +402,12 @@ LiteLEDpio myStrip(LED_STRIP_WS2812, false);
 | Feature | `LiteLED` (RMT) | `LiteLEDpio` (PARLIO) |
 |---|---|---|
 | `begin()` full config | `begin(pin, len, dma, priority, psram)` | `begin(pin, len, psram)` |
-| DMA control | `DMA_ON` / `DMA_OFF` | Always uses DMA internally |
+| DMA control | `DMA_ON` / `DMA_OFF` | Always uses GDMA (no flag) |
 | Interrupt priority | `PRIORITY_HIGH` etc. | Not applicable (no ISR) |
-| Max concurrent instances | Up to 8 (RMT channels) | 1 on ESP32-C6 |
+| Pixel buffer in PSRAM | Yes, via `psram_flag` | Yes, via `psram_flag` |
+| DMA bitstream buffer | Configurable | Always internal DMA RAM |
+| RGBW support | Yes | Yes, identical behaviour |
+| Max concurrent instances | Up to 8 (RMT channels) | 1 on ESP32-C6 / ESP32-H2 |
 | SoC availability | All ESP32 with RMT | `SOC_PARLIO_SUPPORTED` only |
 
 ---
