@@ -79,6 +79,9 @@
 - [Performance Considerations](#performance-considerations)
   - [Transmission Time](#transmission-time)
   - [Memory Usage](#memory-usage)
+    - [LiteLED (RMT) Memory](#liteled-rmt-memory)
+    - [LiteLEDpio (PARLIO) Memory](#liteLEDpio-parlio-memory)
+    - [Total Internal RAM Footprint](#total-internal-ram-footprint)
 - [Optimization Tips](#optimization-tips)
 - [Troubleshooting](#troubleshooting)
   - [No LEDs Light Up](#no-leds-light-up)
@@ -1866,21 +1869,66 @@ LED strip update time depends on the number of LEDs:
 
 ## Memory Usage
 
-**RGB Strips**: 3 bytes per LED
+Each driver allocates two distinct buffers: a **pixel colour buffer** that holds the R/G/B(/W) values you write via `setPixel()`, `fill()`, etc., and a **DMA bitstream buffer** that holds the pre-encoded waveform sent to the hardware. The two buffers have different size characteristics and different allocation rules.
+
+### LiteLED (RMT) Memory
+
+The RMT driver encodes pixels on-the-fly inside an encoder callback, so there is **no pre-encoded DMA buffer**. Only the pixel colour buffer is heap-allocated.
+
+| Strip type | Bytes per LED | 30 LEDs | 60 LEDs | 144 LEDs | 300 LEDs | 1000 LEDs |
+|------------|:-------------:|--------:|--------:|---------:|---------:|----------:|
+| RGB | 3 | 90 B | 180 B | 432 B | 900 B | 2.9 KB |
+| RGBW | 4 | 120 B | 240 B | 576 B | 1.2 KB | 3.9 KB |
+
+The pixel colour buffer can optionally be placed in PSRAM using the `psram_flag` parameter in `begin()`. When DMA is enabled on the RMT channel (via `DMA_ON` in the full `begin()` overload), the IDF RMT driver allocates additional internal DMA memory; this is managed internally and not reflected in the table above.
+
+### LiteLEDpio (PARLIO) Memory
+
+The PARLIO driver **pre-encodes the entire waveform before transmission**. Each input byte expands to 24 DMA bytes (8 bits × 3 samples/bit), and a 1000-byte reset tail is appended and zero-filled. This DMA bitstream buffer is always allocated from **internal DMA-capable RAM** — GDMA cannot access PSRAM on C6/H2.
+
+The pixel colour buffer follows the same rule as the RMT driver and can optionally be placed in PSRAM.
+
+**RGB strips** (3 bytes/LED colour buffer · 72 DMA bytes/LED encoded)
+
+| LEDs | Colour buffer | DMA buffer | Total heap | DMA buf (internal only) |
+|-----:|:-------------:|:----------:|:----------:|:-----------------------:|
+| 8 | 24 B | 1,576 B | 1,600 B | 1,576 B |
+| 16 | 48 B | 2,152 B | 2,200 B | 2,152 B |
+| 30 | 90 B | 3,160 B | 3,250 B | 3,160 B |
+| 60 | 180 B | 5,320 B | 5,500 B | 5,320 B |
+| 64 | 192 B | 5,608 B | 5,800 B | 5,608 B |
+| 144 | 432 B | 11,368 B | 11.5 KB | 11,368 B |
+| 256 | 768 B | 19,432 B | 20.0 KB | 19,432 B |
+| 300 | 900 B | 22,600 B | 23.4 KB | 22,600 B |
+
+**RGBW strips** (4 bytes/LED colour buffer · 96 DMA bytes/LED encoded)
+
+| LEDs | Colour buffer | DMA buffer | Total heap | DMA buf (internal only) |
+|-----:|:-------------:|:----------:|:----------:|:-----------------------:|
+| 30 | 120 B | 3,880 B | 4,000 B | 3,880 B |
+| 60 | 240 B | 6,760 B | 7,000 B | 6,760 B |
+| 64 | 256 B | 7,144 B | 7,400 B | 7,144 B |
+| 144 | 576 B | 14,824 B | 15.2 KB | 14,824 B |
+| 256 | 1,024 B | 25,576 B | 26.4 KB | 25,576 B |
+
+**DMA buffer formula** (total bytes, 4-byte aligned):
+
 ```
-30 LEDs  = 90 bytes
-60 LEDs  = 180 bytes
-300 LEDs = 900 bytes
-1000 LEDs = 3 KB
+RGB:  floor(N × 72 + 1000 + 3) & ~3
+RGBW: floor(N × 96 + 1000 + 3) & ~3
 ```
 
-**RGBW Strips**: 4 bytes per LED
-```
-30 LEDs  = 120 bytes
-60 LEDs  = 240 bytes
-300 LEDs = 1.2 KB
-1000 LEDs = 4 KB
-```
+### Total Internal RAM Footprint
+
+The critical constraint is **internal DMA-capable RAM**. On the ESP32-C6 this is shared system SRAM (~400 KB usable after IDF overhead). For `LiteLEDpio` the DMA buffer is the dominant cost:
+
+| Driver | Pixel buffer location | DMA buffer location | Internal RAM used (RGB, 64 LEDs) |
+|--------|-----------------------|---------------------|---------------------------------:|
+| `LiteLED` (no DMA) | configurable | none | 192 B |
+| `LiteLED` (DMA on) | configurable | internal (IDF-managed) | ~192 B + IDF overhead |
+| `LiteLEDpio` | configurable (PSRAM ok) | **always internal** | **5,608 B** (+ 192 B if colour buf also internal) |
+
+For very large arrays with `LiteLEDpio`, use `PSRAM_ENABLE` for the colour buffer to keep it out of internal SRAM, and ensure the DMA buffer fits within available internal heap before calling `begin()`.
 
 ---
 
