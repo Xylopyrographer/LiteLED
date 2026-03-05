@@ -58,12 +58,14 @@
         + [`operator[](lane)` — LiteLEDpioGroup](#operatorlane)
 - [Advanced Features](#advanced-features)
     * [Multi-Display Support](#multi-display-support)
-        + [Simple Multi-Display Setup](#simple-multi-display-setup)
-        + [Advanced Multi-Display Configuration](#advanced-multi-display-configuration)
-        + [Automatic Priority Management](#automatic-priority-management)
-            - [Priority Levels](#priority-levels)
-        + [GPIO Management](#gpio-management)
-        + [Best Practices for Multi-Display](#best-practices-for-multi-display)
+        + [Multi-Display with the RMT Driver](#multi-display-rmt)
+            - [Simple Multi-Display Setup](#simple-multi-display-setup)
+            - [Advanced Multi-Display Configuration](#advanced-multi-display-configuration)
+            - [Automatic Priority Management](#automatic-priority-management)
+                * [Priority Levels](#priority-levels)
+            - [GPIO Management](#gpio-management)
+            - [Best Practices for Multi-Display](#best-practices-for-multi-display)
+        + [Multi-Display with the PARLIO Driver](#multi-display-parlio)
     * [PSRAM for Large Arrays](#psram-for-large-arrays)
         + [Instance Validation](#instance-validation)
 - [Utilities](#utilities)
@@ -1584,9 +1586,14 @@ if (!lane.isValid()) {
 <a name="multi-display-support"></a>
 ## Multi-Display Support
 
-LiteLED provides advanced support for managing multiple LED displays simultaneously with automatic interrupt priority management and conflict resolution.
+LiteLED supports multiple simultaneous LED displays through two distinct mechanisms — the approach depends on which driver you are using.
 
-A maximum of eight displays are supported as at the time of writing that is the maximum number of available RMT channels of any ESP32 SoC.
+<a name="multi-display-rmt"></a>
+### Multi-Display with the RMT Driver
+
+The `LiteLED` (RMT) driver provides advanced support for managing multiple independent LED displays simultaneously, with automatic interrupt priority management and conflict resolution. Each display gets its own RMT TX channel and its own independent pixel buffer, so strips can have different LED counts, types, and update rates.
+
+A maximum of eight displays are supported — that is the maximum number of available RMT TX channels of any ESP32 SoC at the time of writing.
 
 <a name="simple-multi-display-setup"></a>
 ### Simple Multi-Display Setup
@@ -1691,6 +1698,52 @@ Serial.printf("Currently managing %d displays\n", active);
    ```cpp
    Serial.printf("Active: %d\n", LiteLED::getActiveInstanceCount());
    ```
+
+---
+
+<a name="multi-display-parlio"></a>
+### Multi-Display with the PARLIO Driver
+
+The PARLIO driver offers two multi-display strategies with different trade-offs.
+
+**Independent strips — mix `LiteLEDpio` with `LiteLED`**
+
+On SoCs with one PARLIO TX unit (ESP32-C6, ESP32-H2), one `LiteLEDpio` instance can run alongside up to the SoC's RMT channel limit of `LiteLED` instances. Each strip is fully independent — different LED types, lengths, and update timing are all fine.
+
+```cpp
+LiteLEDpio parlioStrip(LED_STRIP_WS2812, false);  // PARLIO TX unit
+LiteLED    rmtStrip1(LED_STRIP_WS2812, false);    // RMT channel 0
+LiteLED    rmtStrip2(LED_STRIP_SK6812, true);     // RMT channel 1
+
+void setup() {
+    parlioStrip.begin(21, 64);
+    rmtStrip1.begin(14, 30);
+    rmtStrip2.begin(27, 30);
+}
+```
+
+**Synchronised strips — `LiteLEDpioGroup`**
+
+When strips share the same LED type and length and must update in perfect lock-step, `LiteLEDpioGroup` drives up to 8 of them from a single PARLIO TX unit using one shared DMA buffer. This is more memory-efficient than running multiple separate instances and guarantees frame-perfect synchronisation at the cost of a single shared `show()`. See the [LiteLEDpioGroup / LiteLEDpioLane — PARLIO Multi-Strip Driver](#liteledpiogroup--liteledpiolane--parlio-multi-strip-driver) section in Driver Architecture for full details.
+
+```cpp
+LiteLEDpioGroup panels(LED_STRIP_WS2812, 64, false);
+LiteLEDpioLane &panelA = panels.addStrip(21);
+LiteLEDpioLane &panelB = panels.addStrip(19);
+
+void setup() {
+    panels.begin();
+    panels.brightness(20);
+}
+
+void loop() {
+    panelA.fill(0xFF0000);
+    panelB.fill(0x0000FF);
+    panels.show();    // both panels update simultaneously
+    delay(1000);
+}
+```
+
 ---
 
 <a name="psram-for-large-arrays"></a>
