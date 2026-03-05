@@ -58,6 +58,22 @@
         // Dump PARLIO strip configuration to the debug log.
         void parlio_strip_debug_dump( led_strip_t *strip, parlio_strip_cfg_t *cfg );
 
+        // ---- Multi-strip group functions (used by LiteLEDpioGroup) ----------
+
+        // Allocate per-lane pixel buffers and the shared DMA bitstream buffer,
+        // then create and enable the PARLIO TX unit with all assigned lane GPIOs.
+        // cfg->lanes[n].assigned and cfg->lanes[n].strip must be pre-populated
+        // by LiteLEDpioGroup before calling this.
+        esp_err_t parlio_group_install( parlio_group_cfg_t *cfg );
+
+        // Encode all assigned lane pixel buffers into the shared DMA buffer
+        // (applying per-lane brightness), then transmit and block until done.
+        esp_err_t parlio_group_flush( parlio_group_cfg_t *cfg );
+
+        // Wait for any in-progress transfer, disable and delete the PARLIO TX
+        // unit, and free all per-lane pixel buffers and the DMA buffer.
+        esp_err_t parlio_group_free( parlio_group_cfg_t *cfg );
+
     #endif /* SOC_PARLIO_SUPPORTED */
 
 #endif /* __LL_PARLIO_CORE_H__ */

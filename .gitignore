@@ -1,5 +1,8 @@
 # Local development support files — not part of the public library
 support/
 
+# VS Code workspace file
+*.code-workspace
+
 # macOS metadata
 .DS_Store
