@@ -6,7 +6,9 @@
 
 LiteLED is an arduino-esp32 library for the Espressif ESP32 series of SoC's for controlling WS2812B, SK6812, APA106 and SM16703 intelligent "clockless" RGB colour LED's.
 
-It provides hardware-accelerated LED control via the **RMT** peripheral (`LiteLED`) or the **PARLIO** parallel-IO peripheral (`LiteLEDpio` / `LiteLEDpioGroup`). Supports driving multiple LED strips, arbitrary colour orders, DMA transfers, interrupt priority, and buffer allocation to either internal RAM or PSRAM.
+It provides hardware-accelerated LED control via the **RMT** peripheral or the **PARLIO** parallel-IO peripheral. Supports driving multiple LED strips, arbitrary colour orders, DMA transfers, interrupt priority, and buffer allocation to either internal RAM or PSRAM.
+
+Both drivers can be used concurrently as supported by the SoC hardware.
 
 
 ## Features
@@ -21,17 +23,18 @@ It provides hardware-accelerated LED control via the **RMT** peripheral (`LiteLE
 **Works with WiFi**
 
 - When used with a dual core ESP32 SoC, LiteLED is compatible with concurrent use of the WiFi system.
+- When using the PARLIO driver on supported SoC's a single core SoC should also be WiFi compatible. 
 
 
 **Multi-Display Support**
 
 - Up to eight LED strips can be driven independently via the RMT driver.
-- With `LiteLEDpioGroup` (PARLIO), multiple strips are driven simultaneously from a single PARLIO TX unit with perfectly synchronised output and zero per-strip CPU overhead.
+- With `LiteLEDpioGroup` (PARLIO), multiple strips are driven simultaneously from a single PARLIO TX unit with synchronised output and zero per-strip CPU overhead.
 
 **PARLIO Driver**
 
 - `LiteLEDpio`: PARLIO-based single-strip driver, API-identical to `LiteLED`. Switch drivers with a single type change.
-- `LiteLEDpioGroup`: Multi-strip PARLIO driver. Register up to 8 strips on independent bit-lanes; one `show()` transmits all lanes in a single DMA transfer. Ideal for synchronised LED matrix or multi-zone setups.
+- `LiteLEDpioGroup`: Multi-strip PARLIO driver. Register up to 16 strips on independent bit-lanes; all displays are updated in single DMA transfer. Ideal for synchronized LED matrix or multi-zone setups.
 
 **Configurable Color Order**
 
@@ -39,11 +42,11 @@ It provides hardware-accelerated LED control via the **RMT** peripheral (`LiteLE
 
 **DMA Support**
 
-- On supported ESP32 models, can optionally use RMT DMA for driving the LED strip.
+- When using the RMT driver and as supported by the ESP32 model, can optionally use RMT DMA for driving the LED strip.
 
 **Interrupt Priority Support**
 
-- The priority of the routines that service the LED strip can be modified for performance tuning.
+- When using the RMT driver, the priority of the routines that service the LED strip can be modified for performance tuning.
 
 **PSRAM Support**
 
@@ -71,15 +74,17 @@ LiteLED has been tested on the following SoC's:
 
 * ESP32
 * ESP32-C3
-* ESP32-C6  *(includes PARLIO driver validation)*
+* ESP32-C6
 * ESP32-S2
 * ESP32-S3
 
 Would appreciate feedback on use of this library on other models.
 
-LiteLED uses the RMT peripheral of the ESP32 to send data to the LED strip and therefore the target device must have an RMT peripheral. As the family of ESP32 models grows, this is not always the case.
+LiteLED RMT driver uses the RMT peripheral of the ESP32 to send data to the LED strip and therefore the target device must have an RMT peripheral. As the family of ESP32 models grows, this is not always the case.
 
-Among SoC's that do have an RMT peripheral, the implementation also varies. This may place restrictions on the availability and combinations of configurations available when using the library. Note that these restrictions are fundamental to how the RMT peripheral is implemented in the SoC and are not a restriction of the library. 
+Among SoC's that do have an RMT peripheral, the implementation also varies. This may place restrictions on the availability and combinations of configurations available when using the library. Note that these restrictions are fundamental to how the RMT peripheral is implemented in the SoC and are not a restriction of the library.
+
+Similarly, the LiteLED PARLIO driver can only be used on ESP32 SoC's including a PARLIO peripheral. The number of available lanes (concurrently connected strips) is dependant on the SoC.
 
 ### Compatibility with arduino-esp32 Core Versions
 
@@ -102,6 +107,14 @@ The table below summarizes compatibility with arduino-esp32 core versions from 2
 1. Not compatible.
 2. Requires the `-DESP32_ARDUINO_NO_RGB_BUILTIN` workaround discussed on the arduino-esp32 GitHub site [here](https://github.com/espressif/arduino-esp32/pull/9941) and as shown in the example [here](https://github.com/espressif/arduino-esp32/tree/master/libraries/ESP32/examples/RMT/Legacy_RMT_Driver_Compatible).
 3. Fully compatible. **But highly recommend using v3+**.
+
+**PARLIO driver (`LiteLEDpio`, `LiteLEDpioGroup`, `LiteLEDpioLane`) — minimum core version**
+
+The PARLIO-based driver classes require arduino-esp32 core **≥ 3.1.0** on a PARLIO-capable SoC (`SOC_PARLIO_SUPPORTED` — ESP32-C6, ESP32-H2, ESP32-P4 and later). This is the same minimum as the rest of the library for core v3; there is no additional constraint introduced by the PARLIO driver itself.
+
+The PARLIO driver does not use RMT at all and is unaffected by the RMT-specific compatibility issues listed in the table above.
+
+Hardware-validated on XIAO ESP32-C6 with arduino-esp32 **3.3.7** (ESP-IDF v5.5.2).
 
 ### Breaking Change
 
