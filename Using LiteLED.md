@@ -1744,6 +1744,8 @@ void loop() {
 }
 ```
 
+> **Note:** the design of the PARLIO peripheral requires that the driver be instantiated with the largest number of LEDs in a strip. However, strips smaller than that can be attached to the other lanes of the driver as the pixel buffers are sent "last LED first". Meaning as long as the buffer "blacks out" the unused LEDs at the end of the buffer, it will show as expected.
+
 ---
 
 <a name="psram-for-large-arrays"></a>

@@ -2,7 +2,7 @@
     multi_strip_parlio.ino — LiteLEDpioGroup example
 
     Drives two independent LED strips simultaneously from a single PARLIO TX
-    unit using LiteLEDpioGroup.  Every show() encodes both lane pixel buffers
+    unit using LiteLEDpioGroup. Every show() encodes both lane pixel buffers
     into one DMA bitstream and transmits them in perfect lock-step from a
     single GDMA transfer.
 
