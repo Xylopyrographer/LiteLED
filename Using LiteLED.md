@@ -1,122 +1,148 @@
-<!-- TOC updateonsave:false -->
 # Using LiteLED
 
 ## Table of Contents
+
 - [Quick Start](#quick-start)
-  - [Basic Example](#basic-example)
+    * [Basic Example](#basic-example)
 - [Colour Representation](#colour-representation)
-  - [Regarding RGBW Strips](#regarding-rgbw-strips)
+    * [Regarding RGBW Strips](#regarding-rgbw-strips)
 - [Classes and Types](#classes-and-types)
-  - [LiteLED Class](#liteled-class)
-  - [LiteLEDpio Class](#liteLEDpio-class)
-  - [LiteLEDpioGroup Class](#liteLEDpioGroup-class)
-  - [LiteLEDpioLane Class](#liteLEDpioLane-class)
+    * [LiteLED Class](#liteled-class)
+    * [LiteLEDpio Class](#liteledpio-class)
+        + [Constructor](#constructor)
+        + [Destructor](#destructor)
+        + [Initialization](#initialization)
+            - [`begin(data_pin, length)`](#begindata_pin-length)
+            - [`begin(data_pin, length, psram_flag)`](#begindata_pin-length-psram_flag)
+            - [DMA flag and interrupt priority — not applicable](#dma-flag-and-interrupt-priority-not-applicable)
+        + [RGBW Support](#rgbw-support)
+        + [Driving Multiple Strips in Parallel](#driving-multiple-strips-in-parallel)
+        + [Class Interface](#class-interface)
+
+- [LiteLEDpioGroup Class](#liteledpiogroup-class)
+    + [Constructor](#constructor-1)
+    + [Destructor](#destructor-1)
+    + [Strip Registration — `addStrip()`](#strip-registration-addstrip)
+        - [Sequential lane assignment](#sequential-lane-assignment)
+        - [Explicit lane assignment](#explicit-lane-assignment)
+    + [`begin()`](#begin)
+    + [`show()`](#show)
+    + [`brightness()` / `getBrightness()`](#brightness-getbrightness)
+    + [`operator`](#operatorlane)
+    + [Class Interface](#class-interface-1)
+    + [Quick Example](#quick-example)
+- [LiteLEDpioLane Class](#liteledpiolane-class)
+        + [`isValid()`](#isvalid)
+        + [Class Interface](#class-interface-2)
 - [Enumerations](#enumerations)
-  - [`led_strip_type_t`](#led_strip_type_t)
-  - [`color_order_t`](#color_order_t)
-  - [`ll_dma_t`](#ll_dma_t)
-  - [`ll_priority_t`](#ll_priority_t)
-  - [`ll_psram_t`](#ll_psram_t)
+    * [`led_strip_type_t`](#led_strip_type_t)
+    * [`color_order_t`](#color_order_t)
+    * [`ll_dma_t`](#ll_dma_t)
+    * [`ll_priority_t`](#ll_priority_t)
+    * [`ll_psram_t`](#ll_psram_t)
 - [Structures](#structures)
-  - [`rgb_t`](#rgb_t)
-  - [`crgb_t`](#crgb_t)
+    * [`rgb_t`](#rgb_t)
+    * [`crgb_t`](#crgb_t)
 - [Library API](#library-api)
-  - [Constructor](#constructor)
-    - [`LiteLED()`](#liteled)
-  - [Destructor](#destructor)
-    - [`~LiteLED()`](#liteled-1)
-  - [Initialization Methods](#initialization-methods)
-    - [`begin()` - Basic](#begin---basic)
-    - [`begin()` - PSRAM](#begin---psram)
-    - [`begin()` - Full Configuration](#begin---full-configuration)
-  - [Display Control Methods](#display-control-methods)
-    - [`show()`](#show)
-    - [`clear()`](#clear)
-    - [`brightness()`](#brightness)
-    - [`getBrightness()`](#getbrightness)
-  - [Pixel Manipulation Methods](#pixel-manipulation-methods)
-    - [`setPixel()` - `rgb_t`](#setpixel---rgb_t)
-    - [`setPixel()` - `crgb_t`](#setpixel---crgb_t)
-    - [`setPixels()` - `rgb_t` Array](#setpixels---rgb_t-array)
-    - [`setPixels()` - `crgb_t` Array](#setpixels---crgb_t-array)
-    - [`fill()` - `rgb_t`](#fill---rgb_t)
-    - [`fill()` - `crgb_t`](#fill---crgb_t)
-    - [`fillRandom()`](#fillrandom)
-  - [Pixel Reading Methods](#pixel-reading-methods)
-    - [`getPixel()`](#getpixel)
-    - [`getPixelC()`](#getpixelc)
-  - [Colour Order Methods](#colour-order-methods)
-    - [`setOrder()`](#setorder)
-    - [`resetOrder()`](#resetorder)
-  - [Instance Management Methods](#instance-management-methods)
-    - [`isValid()`](#isvalid)
-    - [`getGpioPin()`](#getgpiopin)
-    - [`isGpioAvailable()` - Static](#isgpioavailable---static)
-    - [`getActiveInstanceCount()` - Static](#getactiveinstancecount---static)
+    * [Constructor](#constructor-2)
+        + [`LiteLED()`](#liteled)
+    * [Destructor](#destructor-2)
+        + [`~LiteLED()`](#liteled-1)
+    * [Initialization Methods](#initialization-methods)
+        + [`begin()` - Basic](#begin-basic)
+        + [`begin()` - PSRAM](#begin-psram)
+        + [`begin()` - Full Configuration](#begin-full-configuration)
+    * [Display Control Methods](#display-control-methods)
+        + [`show()`](#show-1)
+        + [`clear()`](#clear)
+        + [`brightness()`](#brightness)
+        + [`getBrightness()`](#getbrightness)
+    * [Pixel Manipulation Methods](#pixel-manipulation-methods)
+        + [`setPixel()` - `rgb_t`](#setpixel-rgb_t)
+        + [`setPixel()` - `crgb_t`](#setpixel-crgb_t)
+        + [`setPixels()` - `rgb_t` Array](#setpixels-rgb_t-array)
+        + [`setPixels()` - `crgb_t` Array](#setpixels-crgb_t-array)
+        + [`fill()` - `rgb_t`](#fill-rgb_t)
+        + [`fill()` - `crgb_t`](#fill-crgb_t)
+        + [`fillRandom()`](#fillrandom)
+    * [Pixel Reading Methods](#pixel-reading-methods)
+        + [`getPixel()`](#getpixel)
+        + [`getPixelC()`](#getpixelc)
+    * [Colour Order Methods](#colour-order-methods)
+        + [`setOrder()`](#setorder)
+        + [`resetOrder()`](#resetorder)
+    * [Instance Management Methods](#instance-management-methods)
+        + [`isValid()`](#isvalid-1)
+        + [`getGpioPin()`](#getgpiopin)
+        + [`isGpioAvailable()` - Static](#isgpioavailable-static)
+        + [`getActiveInstanceCount()` - Static](#getactiveinstancecount-static)
 - [Advanced Features](#advanced-features)
-  - [Multi-Display Support](#multi-display-support)
-    - [Simple Multi-Display Setup](#simple-multi-display-setup)
-    - [Advanced Multi-Display Configuration](#advanced-multi-display-configuration)
-    - [Automatic Priority Management](#automatic-priority-management)
-      - [Priority Levels](#priority-levels)
-    - [GPIO Management](#gpio-management)
-    - [Best Practices for Multi-Display](#best-practices-for-multi-display)
-  - [PSRAM for Large Arrays](#psram-for-large-arrays)
-    - [Instance Validation](#instance-validation)
+    * [Multi-Display Support](#multi-display-support)
+        + [Simple Multi-Display Setup](#simple-multi-display-setup)
+        + [Advanced Multi-Display Configuration](#advanced-multi-display-configuration)
+        + [Automatic Priority Management](#automatic-priority-management)
+            - [Priority Levels](#priority-levels)
+        + [GPIO Management](#gpio-management)
+        + [Best Practices for Multi-Display](#best-practices-for-multi-display)
+    * [PSRAM for Large Arrays](#psram-for-large-arrays)
+        + [Instance Validation](#instance-validation)
 - [Utilities](#utilities)
-  - [LiteLED\_Utils](#liteled_utils)
-    - [`isDmaSupported()`](#isdmasupported)
-    - [`isPrioritySupported()`](#isprioritysupported)
-    - [Complete Example](#complete-example)
-    - [Integration with Existing Code](#integration-with-existing-code)
-    - [Related Configuration](#related-configuration)
-      - [`DMA_DEFAULT` Behaviour](#dma_default-behaviour)
-  - [Colour Utility Functions](#colour-utility-functions)
-    - [`rgb_from_code()`](#rgb_from_code)
-    - [`rgb_from_values()`](#rgb_from_values)
-    - [`rgb_to_code()`](#rgb_to_code)
-    - [`rgb_is_zero()`](#rgb_is_zero)
-    - [`rgb_luma()`](#rgb_luma)
-    - [`scale8()` and `scale8_video()`](#scale8-and-scale8_video)
+    * [LiteLED_Utils](#liteled_utils)
+        + [`isDmaSupported()`](#isdmasupported)
+        + [`isPrioritySupported()`](#isprioritysupported)
+        + [Complete Example](#complete-example)
+        + [Integration with Existing Code](#integration-with-existing-code)
+        + [Related Configuration](#related-configuration)
+            - [`DMA_DEFAULT` Behaviour](#dma_default-behaviour)
+    * [Colour Utility Functions](#colour-utility-functions)
+        + [`rgb_from_code()`](#rgb_from_code)
+        + [`rgb_from_values()`](#rgb_from_values)
+        + [`rgb_to_code()`](#rgb_to_code)
+        + [`rgb_is_zero()`](#rgb_is_zero)
+        + [`rgb_luma()`](#rgb_luma)
+        + [`scale8()` and `scale8_video()`](#scale8-and-scale8_video)
 - [Performance Considerations](#performance-considerations)
-  - [Transmission Time](#transmission-time)
-  - [Memory Usage](#memory-usage)
-    - [LiteLED (RMT) Memory](#liteled-rmt-memory)
-    - [LiteLEDpio (PARLIO) Memory](#liteLEDpio-parlio-memory)
-    - [Total Internal RAM Footprint](#total-internal-ram-footprint)
+    * [Transmission Time](#transmission-time)
+    * [Memory Usage](#memory-usage)
+        + [LiteLED (RMT) Memory](#liteled-rmt-memory)
+        + [LiteLEDpio (PARLIO) Memory](#liteledpio-parlio-memory)
+        + [LiteLEDpioGroup Memory](#liteledpiogroup-memory)
+        + [Total Internal RAM Footprint](#total-internal-ram-footprint)
 - [Optimization Tips](#optimization-tips)
 - [Troubleshooting](#troubleshooting)
-  - [No LEDs Light Up](#no-leds-light-up)
-  - [Wrong Colours](#wrong-colours)
-  - [Flickering or Glitches](#flickering-or-glitches)
-  - [GPIO Already in Use Error](#gpio-already-in-use-error)
-  - [Memory Allocation Failed](#memory-allocation-failed)
-  - [Compile-Time Assertions](#compile-time-assertions)
-  - [Compile-Time Warnings](#compile-time-warnings)
-  - [Error Handling](#error-handling)
-    - [Return Status Codes](#return-status-codes)
-    - [Error Checking Pattern](#error-checking-pattern)
-    - [Common Error Scenarios](#common-error-scenarios)
-      - [GPIO Already in Use](#gpio-already-in-use)
-      - [Out of Bounds LED Index](#out-of-bounds-led-index)
-      - [Memory Allocation Failure](#memory-allocation-failure)
-  - [Logging](#logging)
+    * [No LEDs Light Up](#no-leds-light-up)
+    * [Wrong Colours](#wrong-colours)
+    * [Flickering or Glitches](#flickering-or-glitches)
+    * [GPIO Already in Use Error](#gpio-already-in-use-error)
+    * [Memory Allocation Failed](#memory-allocation-failed)
+    * [Compile-Time Assertions](#compile-time-assertions)
+    * [Compile-Time Warnings](#compile-time-warnings)
+    * [Error Handling](#error-handling)
+        + [Return Status Codes](#return-status-codes)
+        + [Error Checking Pattern](#error-checking-pattern)
+        + [Common Error Scenarios](#common-error-scenarios)
+            - [GPIO Already in Use](#gpio-already-in-use)
+            - [Out of Bounds LED Index](#out-of-bounds-led-index)
+            - [Memory Allocation Failure](#memory-allocation-failure)
+    * [Logging](#logging)
 - [Usage Examples](#usage-examples)
-  - [Basic Example - Solid Colour](#basic-example---solid-colour)
-  - [Brightness Ramping](#brightness-ramping)
-  - [Rainbow Pattern](#rainbow-pattern)
-  - [Multiple Strips](#multiple-strips)
-  - [RGBW Strip with Auto White](#rgbw-strip-with-auto-white)
-  - [Large Array with PSRAM](#large-array-with-psram)
-  - [High-Performance with DMA](#high-performance-with-dma)
+    * [Basic Example - Solid Colour](#basic-example-solid-colour)
+    * [Brightness Ramping](#brightness-ramping)
+    * [Rainbow Pattern](#rainbow-pattern)
+    * [Multiple Strips](#multiple-strips)
+    * [RGBW Strip with Auto White](#rgbw-strip-with-auto-white)
+    * [Large Array with PSRAM](#large-array-with-psram)
+    * [High-Performance with DMA](#high-performance-with-dma)
 - [Version History](#version-history)
 
-<!-- /TOC -->
+<!-- TOC end -->
 
 ---
 
+<a name="quick-start"></a>
 # Quick Start
 
+<a name="basic-example"></a>
 ## Basic Example
 
 **Initialization Sequence**
@@ -159,6 +185,7 @@ void loop() {
 
 ---
 
+<a name="colour-representation"></a>
 # Colour Representation
 
 The intensity and colour of a LED is defined by setting a value for each of its red, blue and green channels. Values range between `0` and `255`, where `0` is off and `255` is full on. By adjusting the values of each channel, different colours and intensities result.
@@ -207,6 +234,7 @@ will produce an error at line 2 as `myOtherColour` is defined as type `crgb_t` a
 
 See also the *Kibbles and Bits* section below.
 
+<a name="regarding-rgbw-strips"></a>
 ## Regarding RGBW Strips
 
 LiteLED can drive RGBW strips like SK6812 RGBW types however there is no direct method for setting the value of the W channel. By default LiteLED will automatically set the value of the W channel based on some behind the scenes magic derived from the R, G, and B values for that LED. Thus by default the R, G, B, and W LED's will illuminate based on the values set. 
@@ -217,8 +245,10 @@ LiteLED does not support RGBWW (dual white channel) type strips.
 
 ---
 
+<a name="classes-and-types"></a>
 # Classes and Types
 
+<a name="liteled-class"></a>
 ## LiteLED Class
 
 The main class for controlling LED strips.
@@ -272,6 +302,7 @@ If you're curious about how the library is structured, take a look at the `LiteL
 
 ---
 
+<a name="liteledpio-class"></a>
 ## LiteLEDpio Class
 
 API-compatible alternative to `LiteLED` that drives LED strips via the **PARLIO** (Parallel IO) peripheral instead of RMT.
@@ -280,6 +311,7 @@ API-compatible alternative to `LiteLED` that drives LED strips via the **PARLIO*
 
 **Hardware limits on ESP32-C6:** Only one `LiteLEDpio` instance can be active at a time (`SOC_PARLIO_TX_UNITS_PER_GROUP = 1`). Combine with `LiteLED` (up to 2 RMT TX channels on C6) for multi-strip applications.
 
+<a name="constructor"></a>
 ### Constructor
 
 ```cpp
@@ -293,6 +325,7 @@ Sets the strip type and colour format. No hardware is allocated until `begin()` 
 | `led_type` | `led_strip_type_t` | LED strip protocol (e.g., `LED_STRIP_WS2812`) |
 | `rgbw` | `bool` | `true` for RGBW strips (e.g., SK6812 RGBW); `false` for RGB strips |
 
+<a name="destructor"></a>
 ### Destructor
 
 ```cpp
@@ -301,8 +334,10 @@ Sets the strip type and colour format. No hardware is allocated until `begin()` 
 
 Waits for any in-progress GDMA transfer to complete, disables and deletes the PARLIO TX unit, and frees both the pixel colour buffer and the DMA bitstream buffer. Safe to call even if `begin()` was never called or failed.
 
+<a name="initialization"></a>
 ### Initialization
 
+<a name="begindata_pin-length"></a>
 #### `begin(data_pin, length)`
 
 ```cpp
@@ -317,6 +352,7 @@ esp_err_t begin(uint8_t data_pin, size_t length, bool auto_w = true);
 
 Allocates the pixel colour buffer in internal RAM, allocates the DMA bitstream buffer in internal DMA-capable RAM, creates and enables the PARLIO TX unit. Returns `ESP_OK` on success, or an `esp_err_t` error code if the GPIO is already in use or allocation fails.
 
+<a name="begindata_pin-length-psram_flag"></a>
 #### `begin(data_pin, length, psram_flag)`
 
 ```cpp
@@ -336,18 +372,21 @@ The `psram_flag` controls allocation of the **pixel colour buffer** only. For la
 
 Regardless of `psram_flag`, the **DMA bitstream buffer** is always allocated from internal DMA-capable RAM (`MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL`). GDMA on C6/H2 cannot read PSRAM. The DMA buffer is approximately 87 bytes per LED (24 DMA bytes × 3 colour channels, plus reset padding); for 64 LEDs this is ~5.6 KB, for 144 LEDs ~12.4 KB.
 
+<a name="dma-flag-and-interrupt-priority-not-applicable"></a>
 #### DMA flag and interrupt priority — not applicable
 
 `LiteLEDpio` exposes **no** `dma_flag` or `priority` parameters. The PARLIO peripheral transfers data exclusively via GDMA — DMA is always on and cannot be disabled. Because no CPU ISR is involved in the transmission, interrupt priority configuration has no meaning for `LiteLEDpio`.
 
 The three-parameter overload `begin(pin, len, dma_flag, priority, psram_flag)` available on `LiteLED` (RMT) does not exist on `LiteLEDpio`. Attempting to pass `DMA_ON`, `DMA_OFF`, or any `ll_priority_t` value to a `LiteLEDpio` initializer will result in a compile error.
 
+<a name="rgbw-support"></a>
 ### RGBW Support
 
 `LiteLEDpio` supports RGBW LED types (e.g., `LED_STRIP_SK6812`) identically to `LiteLED`. Pass `true` for the `rgbw` constructor argument and select an RGBW-capable `led_strip_type_t`. The `auto_w` parameter in `begin()` behaves the same as for `LiteLED` — see [Regarding RGBW Strips](#regarding-rgbw-strips).
 
 The PARLIO encoder handles 4-byte-per-pixel RGBW strips correctly: each input byte is independently encoded to 24 DMA bytes, so each RGBW LED produces 4 × 24 = 96 DMA bytes.
 
+<a name="driving-multiple-strips-in-parallel"></a>
 ### Driving Multiple Strips in Parallel
 
 The PARLIO peripheral includes up to 8 data output lines (`data_gpio_nums[0..7]`) that all carry the **same bitstream simultaneously**. This is a fundamental hardware property: all active output lines always see identical data, and there is no way to send different data to different pins within one PARLIO TX unit.
@@ -356,6 +395,7 @@ Because all output lines share one bitstream, up to 8 LED strips can be driven c
 
 > **Note:** `LiteLEDpio` drives a single strip on `data_gpio_nums[0]` only (the `data_pin` passed to `begin()`). The other 7 PARLIO output lines are routed to `GPIO_NUM_NC` and carry no signal. For driving multiple independent strips simultaneously — each with its own content and colour data — use `LiteLEDpioGroup`. See [LiteLEDpioGroup Class](#liteLEDpioGroup-class).
 
+<a name="class-interface"></a>
 ### Class Interface
 
 ```cpp
@@ -417,6 +457,7 @@ LiteLEDpio myStrip(LED_STRIP_WS2812, false);
 
 ---
 
+<a name="liteledpiogroup-class"></a>
 # LiteLEDpioGroup Class
 
 Drives up to 8 independent LED strips simultaneously from a single PARLIO TX unit. Each strip occupies one **bit-lane** of the PARLIO data bus; every `show()` call encodes all lane pixel buffers into a shared DMA bitstream and transmits them in a single GDMA transfer — all strips update in perfect lock-step with zero per-strip CPU overhead.
@@ -429,6 +470,7 @@ Drives up to 8 independent LED strips simultaneously from a single PARLIO TX uni
 - Only one `LiteLEDpioGroup` (or `LiteLEDpio`) can be active at a time on C6/H2.
 - `show()` on any lane or the group always transmits **all** lanes; there is no per-lane-only transmit.
 
+<a name="constructor-1"></a>
 ### Constructor
 
 ```cpp
@@ -443,6 +485,7 @@ Defines the shared configuration for every lane. No hardware is allocated until 
 | `length` | `size_t` | Number of LEDs per strip (same for all lanes) |
 | `rgbw` | `bool` | `true` for RGBW strips; `false` for RGB |
 
+<a name="destructor-1"></a>
 ### Destructor
 
 ```cpp
@@ -451,10 +494,12 @@ Defines the shared configuration for every lane. No hardware is allocated until 
 
 Waits for any in-progress GDMA transfer, disables and deletes the PARLIO TX unit, frees all per-lane pixel buffers and the shared DMA bitstream buffer, and unregisters all GPIOs from the Peripheral Manager.
 
+<a name="strip-registration-addstrip"></a>
 ### Strip Registration — `addStrip()`
 
 Strips must be registered **before** calling `begin()`. Two forms are available:
 
+<a name="sequential-lane-assignment"></a>
 #### Sequential lane assignment
 
 ```cpp
@@ -467,6 +512,7 @@ Assigns the strip to the next available lane (0, 1, 2 …). Returns a `LiteLEDpi
 |-----------|------|-------------|
 | `gpio` | `uint8_t` | GPIO pin connected to the strip DIN |
 
+<a name="explicit-lane-assignment"></a>
 #### Explicit lane assignment
 
 ```cpp
@@ -474,15 +520,26 @@ template<uint8_t LANE>
 LiteLEDpioLane &addStrip(uint8_t gpio);
 ```
 
-`LANE` is verified against `PARLIO_TX_UNIT_MAX_DATA_WIDTH` at compile time via `static_assert`. Use this form when lane numbering has hardware significance (e.g., PCB routing).
+`LANE` is verified against `PARLIO_TX_UNIT_MAX_DATA_WIDTH` at compile time via `static_assert`.
+
+The lane number has no physical significance — it is an internal index that determines which bit position in the shared DMA buffer carries that strip's signal, and which `data_gpio_nums[N]` slot the GPIO occupies. User code normally accesses strips by their named `LiteLEDpioLane&` references, not by index.
+
+Use the explicit form when the lane **index** itself matters to your code:
+
+- **Sparse assignment** — deliberately leaving lane slots empty for future hardware expansion or to reserve specific index positions.
+- **External index storage** — other code records lane numbers and retrieves strips via `strips[n]` later; explicit assignment gives a guaranteed, init-order-independent index.
+- **Documentation of intent** — making the lane-to-strip mapping explicit in the source for maintainability.
+
+Both forms give identical freedom to choose any GPIO pin; the explicit form only additionally controls the lane index.
 
 ```cpp
-// Example: explicit lanes
+// Example: sparse explicit lanes — lanes 1, 2 left empty for future use
 LiteLEDpioGroup strips(LED_STRIP_WS2812, 64, false);
 LiteLEDpioLane &leftPanel  = strips.addStrip<0>(21);
-LiteLEDpioLane &rightPanel = strips.addStrip<3>(19);  // lane 1 and 2 skipped
+LiteLEDpioLane &rightPanel = strips.addStrip<3>(19);
 ```
 
+<a name="begin"></a>
 ### `begin()`
 
 ```cpp
@@ -497,6 +554,7 @@ Allocates per-lane pixel colour buffers, allocates the shared DMA bitstream buff
 
 Returns `ESP_OK` on success, or an `esp_err_t` error code on failure (GPIO conflict, memory allocation failure, etc.).
 
+<a name="show"></a>
 ### `show()`
 
 ```cpp
@@ -505,6 +563,7 @@ esp_err_t show();
 
 Encodes all assigned lane pixel buffers into the shared DMA bitstream buffer and transmits the frame via a single GDMA transfer. Blocks until transmission (including the reset/latch period) is complete. All strips update simultaneously.
 
+<a name="brightness-getbrightness"></a>
 ### `brightness()` / `getBrightness()`
 
 ```cpp
@@ -514,6 +573,7 @@ uint8_t   getBrightness();
 
 Sets or gets the brightness applied to all lanes equally. The brightness is applied non-destructively during `show()` encoding; pixel buffer values are not modified. If `show` is `true`, calls `show()` automatically after updating the brightness.
 
+<a name="operatorlane"></a>
 ### `operator[](lane)`
 
 ```cpp
@@ -522,6 +582,7 @@ LiteLEDpioLane &operator[](uint8_t lane);
 
 Returns the `LiteLEDpioLane` reference for the given bit-lane index. Returns a silent null lane if the index is out of range or was never registered via `addStrip()`.
 
+<a name="class-interface-1"></a>
 ### Class Interface
 
 ```cpp
@@ -543,6 +604,7 @@ public:
 };
 ```
 
+<a name="quick-example"></a>
 ### Quick Example
 
 ```cpp
@@ -577,6 +639,7 @@ void loop() {
 
 ---
 
+<a name="liteledpiolane-class"></a>
 # LiteLEDpioLane Class
 
 A thin handle for one bit-lane within a `LiteLEDpioGroup`. `LiteLEDpioLane` objects are **owned by the group** and never constructed directly by user code. Obtain a reference from `addStrip()` or `operator[]`.
@@ -585,6 +648,7 @@ A thin handle for one bit-lane within a `LiteLEDpioGroup`. `LiteLEDpioLane` obje
 
 **`show()` semantics:** Calling `show()` on a lane is equivalent to calling `show()` on the parent group — it always encodes and transmits **all** lanes, not just the one lane. This guarantees that no lane is ever out of sync with its peers.
 
+<a name="isvalid"></a>
 ### `isValid()`
 
 ```cpp
@@ -593,6 +657,7 @@ bool isValid() const;
 
 Returns `true` if the lane was properly initialised via `addStrip()`. A null-lane sentinel (returned by `operator[]` for an unregistered lane) returns `false`.
 
+<a name="class-interface-2"></a>
 ### Class Interface
 
 ```cpp
@@ -619,9 +684,11 @@ public:
 
 ---
 
+<a name="enumerations"></a>
 # Enumerations
 
 
+<a name="led_strip_type_t"></a>
 ## `led_strip_type_t`
 
 Supported LED strip types.
@@ -641,6 +708,7 @@ Defines the LED strip type, which determines timing parameters and default colou
 
 ---
 
+<a name="color_order_t"></a>
 ## `color_order_t`
 
 LED colour byte ordering.
@@ -668,6 +736,7 @@ Specifies the byte order for transmitting colour data to LEDs. Most WS2812 strip
 
 ---
 
+<a name="ll_dma_t"></a>
 ## `ll_dma_t`
 
 ```cpp
@@ -692,6 +761,7 @@ Only supported on ESP32 variants with RMT DMA support. The library will issue a 
 
 ---
 
+<a name="ll_priority_t"></a>
 ## `ll_priority_t`
 
 RMT interrupt priority level
@@ -709,6 +779,7 @@ RMT interrupt priority level
 
 ---
 
+<a name="ll_psram_t"></a>
 ## `ll_psram_t`
 
 PSRAM buffer allocation preference.
@@ -729,8 +800,10 @@ PSRAM buffer allocation preference.
 
 ---
 
+<a name="structures"></a>
 # Structures
 
+<a name="rgb_t"></a>
 ## `rgb_t`
 
 RGB colour representation (struct style).
@@ -764,6 +837,7 @@ color.b = 0;          // or color.blue = 0;
 ```
 ---
 
+<a name="crgb_t"></a>
 ## `crgb_t`
 
 RGB colour code (32-bit hex format).
@@ -785,10 +859,13 @@ crgb_t white = 0xFFFFFF;
 
 ---
 
+<a name="library-api"></a>
 # Library API
 
+<a name="constructor-2"></a>
 ## Constructor
 
+<a name="liteled"></a>
 ### `LiteLED()`
 
 Creates a new LiteLED instance.
@@ -820,8 +897,10 @@ LiteLED rgbwStrip(LED_STRIP_SK6812, true);
 
 ---
 
+<a name="destructor-2"></a>
 ## Destructor
 
+<a name="liteled-1"></a>
 ### `~LiteLED()`
 
 Destroys the LiteLED instance and frees all resources.
@@ -844,8 +923,10 @@ Frees:
 
 ---
 
+<a name="initialization-methods"></a>
 ## Initialization Methods
 
+<a name="begin-basic"></a>
 ### `begin()` - Basic
 
 Initialize LED strip with default settings.
@@ -884,6 +965,7 @@ if ( strip.begin( 14, 60 ) == ESP_OK ) {
 
 ---
 
+<a name="begin-psram"></a>
 ### `begin()` - PSRAM
 
 Initialize LED strip with PSRAM control.
@@ -917,6 +999,7 @@ smallStrip.begin(15, 30, PSRAM_DISABLE);
 
 ---
 
+<a name="begin-full-configuration"></a>
 ### `begin()` - Full Configuration
 
 Initialize LED strip with all advanced options.
@@ -956,8 +1039,10 @@ perfStrip.begin(14, 500, DMA_ON, PRIORITY_HIGH, PSRAM_AUTO);
 
 ---
 
+<a name="display-control-methods"></a>
 ## Display Control Methods
 
+<a name="show-1"></a>
 ### `show()`
 
 Send the LED buffer data to the strip.
@@ -989,6 +1074,7 @@ strip.show();  // Update the strip
 
 ---
 
+<a name="clear"></a>
 ### `clear()`
 
 Set all LEDs to black (off), optionally update strip.
@@ -1017,6 +1103,7 @@ strip.clear(true);
 
 ---
 
+<a name="brightness"></a>
 ### `brightness()`
 
 Set global brightness level, optionally update strip.
@@ -1056,6 +1143,7 @@ strip.brightness(51, true);
 
 ---
 
+<a name="getbrightness"></a>
 ### `getBrightness()`
 
 Get current brightness level.
@@ -1081,8 +1169,10 @@ If `getBrightness()` is used after using `brightness()` but before a `show()` or
 
 ---
 
+<a name="pixel-manipulation-methods"></a>
 ## Pixel Manipulation Methods
 
+<a name="setpixel-rgb_t"></a>
 ### `setPixel()` - `rgb_t`
 
 Set single LED colour using `rgb_t` structure.
@@ -1115,6 +1205,7 @@ strip.setPixel(5, rgb_from_values(0, 255, 0), true);
 
 ---
 
+<a name="setpixel-crgb_t"></a>
 ### `setPixel()` - `crgb_t`
 
 Set the colour of a single LED using 32-bit 
@@ -1145,6 +1236,7 @@ strip.show();
 
 ---
 
+<a name="setpixels-rgb_t-array"></a>
 ### `setPixels()` - `rgb_t` Array
 
 Set multiple consecutive LEDs from an `rgb_t` array.
@@ -1181,6 +1273,7 @@ strip.setPixels(0, 6, rainbow, true);
 
 ---
 
+<a name="setpixels-crgb_t-array"></a>
 ### `setPixels()` - `crgb_t` Array
 
 Set multiple consecutive LEDs from a `crgb_t` array.
@@ -1210,6 +1303,7 @@ strip.show();
 
 ---
 
+<a name="fill-rgb_t"></a>
 ### `fill()` - `rgb_t`
 
 Fill entire strip with a single colour.
@@ -1241,6 +1335,7 @@ strip.show();
 
 ---
 
+<a name="fill-crgb_t"></a>
 ### `fill()` - `crgb_t`
 
 Fill entire strip with a single colour code.
@@ -1267,6 +1362,7 @@ strip.fill(0xFF0000, true);
 
 ---
 
+<a name="fillrandom"></a>
 ### `fillRandom()`
 
 Fill strip with random colours.
@@ -1305,8 +1401,10 @@ void loop() {
 
 ---
 
+<a name="pixel-reading-methods"></a>
 ## Pixel Reading Methods
 
+<a name="getpixel"></a>
 ### `getPixel()`
 
 Get colour of a single LED as `rgb_t` structure.
@@ -1336,6 +1434,7 @@ Serial.printf("LED 5: R=%d, G=%d, B=%d\n", color.r, color.g, color.b);
 
 ---
 
+<a name="getpixelc"></a>
 ### `getPixelC()`
 
 Get colour of a single LED as 32-bit colour code.
@@ -1361,8 +1460,10 @@ if (color == 0xFF0000) {
 
 ---
 
+<a name="colour-order-methods"></a>
 ## Colour Order Methods
 
+<a name="setorder"></a>
 ### `setOrder()`
 
 Set custom colour byte order for the LED strip.
@@ -1403,6 +1504,7 @@ strip.setOrder(ORDER_BGR);
 
 ---
 
+<a name="resetorder"></a>
 ### `resetOrder()`
 
 Reset colour order to the default for the LED strip type.
@@ -1428,8 +1530,10 @@ strip.resetOrder();
 
 ---
 
+<a name="instance-management-methods"></a>
 ## Instance Management Methods
 
+<a name="isvalid-1"></a>
 ### `isValid()`
 
 Check if this LiteLED instance is still valid.
@@ -1462,6 +1566,7 @@ Useful in complex applications where GPIOs might be dynamically reassigned.
 
 ---
 
+<a name="getgpiopin"></a>
 ### `getGpioPin()`
 
 Get the GPIO pin number used by this instance.
@@ -1486,6 +1591,7 @@ if (pin >= 0) {
 
 ---
 
+<a name="isgpioavailable-static"></a>
 ### `isGpioAvailable()` - Static
 
 Check if a GPIO pin is available for LiteLED use.
@@ -1519,6 +1625,7 @@ if (LiteLED::isGpioAvailable(14)) {
 
 ---
 
+<a name="getactiveinstancecount-static"></a>
 ### `getActiveInstanceCount()` - Static
 
 Get count of active LiteLED instances.
@@ -1540,14 +1647,17 @@ Serial.printf("Active LED strip instances: %d\n", count);
 
 ---
 
+<a name="advanced-features"></a>
 # Advanced Features
 
+<a name="multi-display-support"></a>
 ## Multi-Display Support
 
 LiteLED provides advanced support for managing multiple LED displays simultaneously with automatic interrupt priority management and conflict resolution.
 
 A maximum of eight displays are supported as at the time of writing that is the maximum number of available RMT channels of any ESP32 SoC.
 
+<a name="simple-multi-display-setup"></a>
 ### Simple Multi-Display Setup
 
 The recommended approach for most applications:
@@ -1567,6 +1677,7 @@ void setup() {
 }
 ```
 
+<a name="advanced-multi-display-configuration"></a>
 ### Advanced Multi-Display Configuration
 
 For applications with specific requirements:
@@ -1584,6 +1695,7 @@ void setup() {
 }
 ```
 
+<a name="automatic-priority-management"></a>
 ### Automatic Priority Management
 
 LiteLED v3.0.0+ includes intelligent priority conflict resolution:
@@ -1597,6 +1709,7 @@ LiteLED v3.0.0+ includes intelligent priority conflict resolution:
 
 - Interrupt priority support requires arduino-esp32 core version 3.2.0 or greater.
 
+<a name="priority-levels"></a>
 #### Priority Levels
 
 | Priority | Enumeration | Description |
@@ -1606,6 +1719,7 @@ LiteLED v3.0.0+ includes intelligent priority conflict resolution:
 | 2 | `PRIORITY_MED` | Medium priority |
 | 3 | `PRIORITY_LOW` | Low priority for background displays |
 
+<a name="gpio-management"></a>
 ### GPIO Management
 
 Integration with ESP32 Peripheral Manager ensures safe GPIO usage:
@@ -1623,6 +1737,7 @@ uint8_t active = LiteLED::getActiveInstanceCount();
 Serial.printf("Currently managing %d displays\n", active);
 ```
 
+<a name="best-practices-for-multi-display"></a>
 ### Best Practices for Multi-Display
 
 1. **Use simple initialization** when possible:
@@ -1647,6 +1762,7 @@ Serial.printf("Currently managing %d displays\n", active);
    ```
 ---
 
+<a name="psram-for-large-arrays"></a>
 ## PSRAM for Large Arrays
 
 PSRAM is useful for LED arrays with hundreds of LEDs:
@@ -1671,6 +1787,7 @@ bigStrip.begin(14, 100, PSRAM_DISABLE);
 
 ---
 
+<a name="instance-validation"></a>
 ### Instance Validation
 
 In dynamic applications where GPIO pins might be reassigned:
@@ -1693,12 +1810,15 @@ void loop() {
 
 ---
 
+<a name="utilities"></a>
 # Utilities
 
+<a name="liteled_utils"></a>
 ## LiteLED_Utils
 
 The `LiteLED_Utils` namespace provides compile-time utility functions for querying hardware capabilities. These functions allow developers to check platform support for various features before configuring their LED strips.
 
+<a name="isdmasupported"></a>
 ### `isDmaSupported()`
 
 **Description:**  
@@ -1723,8 +1843,8 @@ None
 **Notes:**
 
 - This is a `constexpr` function, so the result is determined at compile time
-- On chips without DMA support (ESP32, ESP32-C2), this returns `false`
-- On chips with DMA support (ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6, ESP32-H2), this returns `true`
+- On chips without RMT DMA support (ESP32, ESP32-C2, ESP32-C6), this returns `false`
+- On chips with RMT DMA support (ESP32-S2, ESP32-S3, ESP32-C3, ESP32-H2), this returns `true`
 - If you attempt to use `DMA_ON` on unsupported hardware, the library will automatically fall back to `DMA_OFF` with a warning
 
 **Example Usage:**
@@ -1758,6 +1878,7 @@ void setup() {
 
 ---
 
+<a name="isprioritysupported"></a>
 ### `isPrioritySupported()`
 
 **Description:**
@@ -1814,6 +1935,7 @@ void setup() {
 
 ---
 
+<a name="complete-example"></a>
 ### Complete Example
 
 Here's a comprehensive example showing how to use both utility functions together:
@@ -1873,6 +1995,7 @@ void loop() {
     // Your LED animation code here
 }
 ```
+<a name="integration-with-existing-code"></a>
 ### Integration with Existing Code
 
 These utility functions are particularly useful when:
@@ -1883,18 +2006,22 @@ These utility functions are particularly useful when:
 4. **Debugging** to understand platform limitations
 5. **Compile-time configuration** using `if constexpr` in C++17 or later
 
+<a name="related-configuration"></a>
 ### Related Configuration
 
+<a name="dma_default-behaviour"></a>
 #### `DMA_DEFAULT` Behaviour
 
 The `DMA_DEFAULT` enum value is always set to `DMA_OFF` to preserve DMA channels for user applications. This is a conservative default that works on all ESP32 chips. Users who want DMA performance benefits should explicitly use `DMA_ON` after checking `isDmaSupported()`.
 
 ---
 
+<a name="colour-utility-functions"></a>
 ## Colour Utility Functions
 
 A number of functions are included to assist in manipulation and conversion of colours.
 
+<a name="rgb_from_code"></a>
 ### `rgb_from_code()`
 
 Convert a 32-bit colour code to `rgb_t` structure.
@@ -1918,6 +2045,7 @@ rgb_t red = rgb_from_code(0xFF0000);
 
 ---
 
+<a name="rgb_from_values"></a>
 ### `rgb_from_values()`
 
 Create an `rgb_t` colour from individual channel values.
@@ -1942,6 +2070,7 @@ rgb_t purple = rgb_from_values(128, 0, 128);
 
 ---
 
+<a name="rgb_to_code"></a>
 ### `rgb_to_code()`
 
 Convert an `rgb_t` structure to a 32-bit colour code.
@@ -1965,6 +2094,7 @@ crgb_t code = rgb_to_code(color);  // Returns 0xFF8000
 
 ---
 
+<a name="rgb_is_zero"></a>
 ### `rgb_is_zero()`
 
 Check if an RGB colour is black (all channels zero).
@@ -1990,6 +2120,7 @@ if (rgb_is_zero(black)) {
 
 ---
 
+<a name="rgb_luma"></a>
 ### `rgb_luma()`
 
 Calculate the perceived brightness (luma) of an RGB colour.
@@ -2021,6 +2152,7 @@ uint8_t brightness = rgb_luma(color);  // Returns ~158
 
 ---
 
+<a name="scale8-and-scale8_video"></a>
 ### `scale8()` and `scale8_video()`
 
 Scale an 8-bit value by a fractional amount.
@@ -2054,8 +2186,10 @@ uint8_t dim = scale8_video(255, 10);           // Returns ~10
 ---
 
 
+<a name="performance-considerations"></a>
 # Performance Considerations
 
+<a name="transmission-time"></a>
 ## Transmission Time
 
 LED strip update time depends on the number of LEDs:
@@ -2071,10 +2205,12 @@ LED strip update time depends on the number of LEDs:
 
 **Formula**: Time ≈ (LED_COUNT × 30µs)
 
+<a name="memory-usage"></a>
 ## Memory Usage
 
 Each driver allocates two distinct buffers: a **pixel colour buffer** that holds the R/G/B(/W) values you write via `setPixel()`, `fill()`, etc., and a **DMA bitstream buffer** that holds the pre-encoded waveform sent to the hardware. The two buffers have different size characteristics and different allocation rules.
 
+<a name="liteled-rmt-memory"></a>
 ### LiteLED (RMT) Memory
 
 The RMT driver encodes pixels on-the-fly inside an encoder callback, so there is **no pre-encoded DMA buffer**. Only the pixel colour buffer is heap-allocated.
@@ -2086,6 +2222,7 @@ The RMT driver encodes pixels on-the-fly inside an encoder callback, so there is
 
 The pixel colour buffer can optionally be placed in PSRAM using the `psram_flag` parameter in `begin()`. When DMA is enabled on the RMT channel (via `DMA_ON` in the full `begin()` overload), the IDF RMT driver allocates additional internal DMA memory; this is managed internally and not reflected in the table above.
 
+<a name="liteledpio-parlio-memory"></a>
 ### LiteLEDpio (PARLIO) Memory
 
 The PARLIO driver **pre-encodes the entire waveform before transmission**. Each input byte expands to 24 DMA bytes (8 bits × 3 samples/bit), and a 1000-byte reset tail is appended and zero-filled. This DMA bitstream buffer is always allocated from **internal DMA-capable RAM** — GDMA cannot access PSRAM on C6/H2.
@@ -2122,6 +2259,7 @@ RGB:  floor(N × 72 + 1000 + 3) & ~3
 RGBW: floor(N × 96 + 1000 + 3) & ~3
 ```
 
+<a name="liteledpiogroup-memory"></a>
 ### LiteLEDpioGroup Memory
 
 `LiteLEDpioGroup` allocates one pixel colour buffer per lane plus a **single shared DMA bitstream buffer** for all lanes. The DMA buffer size depends only on the strip length and LED type — it does not grow with the number of lanes, because the per-bit-lane encoding packs each lane into individual bits of each DMA byte without increasing the byte count.
@@ -2147,6 +2285,7 @@ RGB:  floor(N × 72 + 1000 + 3) & ~3
 RGBW: floor(N × 96 + 1000 + 3) & ~3
 ```
 
+<a name="total-internal-ram-footprint"></a>
 ### Total Internal RAM Footprint
 
 The critical constraint is **internal DMA-capable RAM**. On the ESP32-C6 this is shared system SRAM (~400 KB usable after IDF overhead). For `LiteLEDpio` the DMA buffer is the dominant cost:
@@ -2163,6 +2302,7 @@ For very large arrays with `LiteLEDpio`, use `PSRAM_ENABLE` for the colour buffe
 
 ---
 
+<a name="optimization-tips"></a>
 # Optimization Tips
 
 1. **Use DMA for large arrays** (300+ LEDs on supported chips)
@@ -2188,8 +2328,10 @@ for (size_t i = 0; i < LED_COUNT; i++) {
 
 ---
 
+<a name="troubleshooting"></a>
 # Troubleshooting
 
+<a name="no-leds-light-up"></a>
 ## No LEDs Light Up
 
 1. **Check GPIO connection**: Verify DIN pin connection
@@ -2198,12 +2340,14 @@ for (size_t i = 0; i < LED_COUNT; i++) {
 4. **Verify initialization**: Check `begin()` return value
 5. **Call `show()`**: LED buffer must be transmitted with `show()`
 
+<a name="wrong-colours"></a>
 ## Wrong Colours
 
 1. **Check colour order**: Try different `setOrder()` values
 2. **Check LED type**: Some "WS2812" clones use RGB instead of GRB
 3. **Power supply issues**: Insufficient power can cause colour errors
 
+<a name="flickering-or-glitches"></a>
 ## Flickering or Glitches
 
 1. **Add 0.1µF capacitor** between ESP32 GND and LED strip GND
@@ -2212,18 +2356,21 @@ for (size_t i = 0; i < LED_COUNT; i++) {
 1. **Use a level shifter** between the GPIO pin and the DIN line if the strip power supply is greater than 3.3V.
 1. **Check power supply quality**: Use stable supply
 
+<a name="gpio-already-in-use-error"></a>
 ## GPIO Already in Use Error
 
 1. **Check for duplicate instances** using same GPIO
 2. **Free previous instance** before reusing GPIO
 3. **Use `isGpioAvailable()`** to verify if GPIO is free
 
+<a name="memory-allocation-failed"></a>
 ## Memory Allocation Failed
 
 1. **Reduce LED count** if using internal RAM
 2. **Enable PSRAM**: Use `PSRAM_AUTO` or `PSRAM_ENABLE`
 3. **Check available heap**: Use `ESP.getFreeHeap()`
 
+<a name="compile-time-assertions"></a>
 ## Compile-Time Assertions
 
 The library performs the following compile-time checks and will halt compilation if any of the following conditions are found.:
@@ -2232,6 +2379,7 @@ The library performs the following compile-time checks and will halt compilation
 * **RMT peripheral:** target ESP32 does not have an RMT peripheral.
 * **arduino-esp32 core version:** the version of the arduino-esp32 core is incompatible with this version of the library.
 
+<a name="compile-time-warnings"></a>
 ## Compile-Time Warnings
 
 When compiling for chips or core versions with limited capabilities, you'll see compile-time warnings:
@@ -2243,8 +2391,10 @@ These warnings inform you at build time of platform limitations, while the utili
 
 ---
 
+<a name="error-handling"></a>
 ## Error Handling
 
+<a name="return-status-codes"></a>
 ### Return Status Codes
 
 The LiteLED methods that write to the LED string buffer or set/reset the colour order return a status code of `esp_err_t ` type on completion. Checking this code and taking action is optional and is an exercise left to the developer.
@@ -2265,6 +2415,7 @@ If you're really interested in diving deeper, head over to the Espressif [ESP-ID
 | `ESP_FAIL` | `-1` | Generic failure |
 
 
+<a name="error-checking-pattern"></a>
 ### Error Checking Pattern
 
 ```cpp
@@ -2275,8 +2426,10 @@ if (err != ESP_OK) {
 }
 ```
 
+<a name="common-error-scenarios"></a>
 ### Common Error Scenarios
 
+<a name="gpio-already-in-use"></a>
 #### GPIO Already in Use
 
 ```cpp
@@ -2295,6 +2448,7 @@ Use different GPIO pins for each strip, or free the first strip before reusing t
 
 ---
 
+<a name="out-of-bounds-led-index"></a>
 #### Out of Bounds LED Index
 
 ```cpp
@@ -2310,6 +2464,7 @@ Ensure LED indices are within valid range (0 to length-1).
 
 ---
 
+<a name="memory-allocation-failure"></a>
 #### Memory Allocation Failure
 
 ```cpp
@@ -2324,6 +2479,7 @@ Use PSRAM for large arrays, reduce LED count, or free unused memory.
 
 ---
 
+<a name="logging"></a>
 ## Logging
 
 To assist in debugging, a number of status and error messages can be sent to the serial port via the esp32 `log_'x'` facility.
@@ -2338,8 +2494,10 @@ If something is not behaving as you think, or you're just curious, set the log l
 
 ---
 
+<a name="usage-examples"></a>
 # Usage Examples
 
+<a name="basic-example-solid-colour"></a>
 ## Basic Example - Solid Colour
 
 ```cpp
@@ -2371,6 +2529,7 @@ void loop() {
 
 ---
 
+<a name="brightness-ramping"></a>
 ## Brightness Ramping
 
 Smooth brightness transitions:
@@ -2400,6 +2559,7 @@ rampBrightness(strip, 0, 5);    // Fade down to off
 
 ---
 
+<a name="rainbow-pattern"></a>
 ## Rainbow Pattern
 
 ```cpp
@@ -2460,6 +2620,7 @@ crgb_t HSVtoRGB(uint8_t h, uint8_t s, uint8_t v) {
 
 ---
 
+<a name="multiple-strips"></a>
 ## Multiple Strips
 
 ```cpp
@@ -2504,6 +2665,7 @@ void loop() {
 
 ---
 
+<a name="rgbw-strip-with-auto-white"></a>
 ## RGBW Strip with Auto White
 
 ```cpp
@@ -2533,6 +2695,7 @@ void loop() {
 
 ---
 
+<a name="large-array-with-psram"></a>
 ## Large Array with PSRAM
 
 ```cpp
@@ -2571,6 +2734,7 @@ void loop() {
 
 ---
 
+<a name="high-performance-with-dma"></a>
 ## High-Performance with DMA
 
 ```cpp
@@ -2612,17 +2776,26 @@ void loop() {
 
 ---
 
+<a name="version-history"></a>
 # Version History
 
 **v3.1.0**
-- Added `LiteLEDpio` class: PARLIO-backed single-strip LED driver for ESP32-C6 and other `SOC_PARLIO_SUPPORTED` SoCs
-- Added `LiteLEDpioGroup` and `LiteLEDpioLane` classes: drive up to 8 independent strips simultaneously from one PARLIO TX unit; single `show()` transmits all lanes in lock-step via one GDMA transfer
-- API-identical to `LiteLED`; switch single-strip driver with one type declaration
-- `begin()` on `LiteLEDpioGroup` accepts `(psram_flag)` only — no DMA or priority flags
+- Added support for using the ESP32 PARLIO peripheral as the driver.
+- Added `LiteLEDpio` class: 
+    - PARLIO-backed single-strip LED driver for SoCs with a PARLIO peripheral
+- Added `LiteLEDpioGroup` and `LiteLEDpioLane` classes:
+    - drive up to 8 independent strips simultaneously from one PARLIO TX unit; 
+    - single `show()` transmits all lanes in lock-step via one GDMA transfer
+- API-identical to `LiteLED`; 
+    - for single-strip LEDs, switch between RMT and PARLIO driver with one type declaration
 - Added `multi_strip_parlio` example sketch
-- Hardware-validated on XIAO ESP32-C6 (arduino-esp32 3.3.7, IDF v5.5.2)
+
+
+**v3.0.1**
+- Bug fixes.
 
 **v3.0.0**
 - Initial release for LiteLED library version 3.0.0.
 
-<!--  --- EOF --- -->
+
+<!-- EOF -->
