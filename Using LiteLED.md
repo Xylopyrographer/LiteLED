@@ -1056,8 +1056,8 @@ Sets the global brightness level. Brightness is applied non-destructively during
 | Driver | Scope |
 |--------|-------|
 | `LiteLED` / `LiteLEDpio` | Applies to the single strip |
-| `LiteLEDpioGroup` | Applies to **all lanes equally** |
-| `LiteLEDpioLane` | Applies to that lane only |
+| `LiteLEDpioGroup` | Sets a group-wide brightness; individual lanes can independently override it via their `LiteLEDpioLane` reference |
+| `LiteLEDpioLane` | Sets the brightness for that lane only, independently of both the group setting and other lanes |
 
 **Example:**
 
@@ -1085,7 +1085,7 @@ Returns the current brightness value (0–255).
 **Notes:**
 
 - Returns the brightness value used the last time `show()` was called. If `brightness()` has been set since the last `show()`, the return value reflects the pending value (what will be applied on the next `show()`).
-- On `LiteLEDpioGroup` returns the group-level brightness. On `LiteLEDpioLane` returns the lane-level brightness.
+- On `LiteLEDpioGroup`, returns the group-wide brightness setting. Each lane can have its own independent brightness set via its `LiteLEDpioLane` reference; `LiteLEDpioLane::getBrightness()` returns that lane's individual value.
 
 **Returns:** Current brightness (0–255)
 
