@@ -18,7 +18,8 @@ LiteLED.h (Main Public API — RMT and PARLIO drivers)
     │   └─> ll_strip_pixels.h/.cpp (Shared Pixel Manipulation)
     ├─> llparlio.h (PARLIO Compatibility Header — SOC_PARLIO_SUPPORTED only)
     │   ├─> ll_led_timings.h (shared — PARLIO timing table)
-    │   └─> ll_parlio_core.h/.cpp (PARLIO Core Operations)
+    │   └─> ll_parlio_core.h/.cpp (PARLIO Core Operations — single-strip and group)
+    ├─> LiteLEDpioGroup.cpp (LiteLEDpioGroup / LiteLEDpioLane — multi-strip PARLIO)
     ├─> ll_registry.h/.cpp (Minimal Instance Tracking)
     ├─> esp32-hal-periman.h (ESP32 Peripheral Manager - Direct GPIO Management)
     └─> llrgb.h (RGB Color Utilities)
@@ -354,14 +355,20 @@ PARLIO peripheral (e.g., ESP32-C6, ESP32-H2).
 **Key Functions:**
 
 ```cpp
+// Single-strip lifecycle
 esp_err_t parlio_strip_init   (led_strip_t *strip, parlio_strip_cfg_t *cfg);
 esp_err_t parlio_strip_install(led_strip_t *strip, parlio_strip_cfg_t *cfg);
 esp_err_t parlio_strip_flush  (led_strip_t *strip, parlio_strip_cfg_t *cfg);
 esp_err_t parlio_strip_free   (led_strip_t *strip, parlio_strip_cfg_t *cfg);
 void      parlio_strip_debug_dump(led_strip_t *strip, parlio_strip_cfg_t *cfg);
+
+// Multi-strip group lifecycle
+esp_err_t parlio_group_install(parlio_group_cfg_t *gcfg);
+esp_err_t parlio_group_flush  (parlio_group_cfg_t *gcfg);
+esp_err_t parlio_group_free   (parlio_group_cfg_t *gcfg);
 ```
 
-**Encoding (`data_width=8`):**
+**Encoding (`data_width=8`, single-strip):**
 
 Each input byte is expanded to 24 DMA bytes (3 bytes per bit, 8 bits per byte).
 Only `data_gpio_nums[0]` (bit 0) is wired to the LED strip; bits 1–7 are
@@ -372,18 +379,32 @@ LED bit 0  →  DMA bytes: 0x01 0x00 0x00  (T0H=400 ns, T0L=800 ns)
 LED bit 1  →  DMA bytes: 0x01 0x01 0x00  (T1H=800 ns, T1L=400 ns)
 ```
 
-The internal `parlio_encode_byte()` is `IRAM_ATTR`-qualified.
+**Multi-lane encoding (`parlio_group_flush`):**
 
-**Supported hardware:** ESP32-C6 (1 PARLIO TX unit, up to 16 data lines).
+The group encoder zeroes the shared DMA buffer, then for each assigned lane
+ORs the lane's brightness-scaled sample bits into the appropriate bit position
+of each DMA byte:
+
+```
+buf[offset + sample] |= (sample_bit << lane_index)
+```
+
+This produces a single DMA bitstream where bit N of each byte carries the
+waveform for lane N's LED strip.  Each lane's `data_gpio_nums[N]` pin
+therefore outputs an independent signal, but all lanes are transmitted
+simultaneously from a single `parlio_tx_unit_transmit()` call.
+
+**Supported hardware:** ESP32-C6 (1 PARLIO TX unit, up to 8 data lines).
 The ESP32-C6 PARLIO TX unit has `SOC_PARLIO_TX_UNITS_PER_GROUP = 1`, meaning
-only one `LiteLEDpio` instance can be active at a time.  Combine with `LiteLED`
-(RMT, up to 2 TX channels on C6) for multi-strip applications.
+only one `LiteLEDpio` or `LiteLEDpioGroup` instance can be active at a time.
+The `parlio_encode_byte()` helper (single-strip path) is `IRAM_ATTR`-qualified.
+The `parlio_group_flush()` multi-lane encoder runs in the Arduino loop task.
 
 **Dependencies:**
 
 - `ll_led_timings.h` (PARLIO timing table)
 - `llrgb.h` (`scale8_video()` for brightness)
-- `LiteLED.h` (`led_strip_t`, `parlio_strip_cfg_t`)
+- `LiteLED.h` (`led_strip_t`, `parlio_strip_cfg_t`, `parlio_group_cfg_t`)
 - ESP-IDF `driver/parlio_tx.h`
 
 ---
@@ -409,6 +430,56 @@ one type declaration.
 - No interrupt priority setting: no ISR callback in the PARLIO path
 - `getActiveInstanceCount()` reflects Peripheral Manager registration only
 - Only one instance active at a time on ESP32-C6
+
+---
+
+### `LiteLEDpioGroup.cpp`
+
+**Purpose:** `LiteLEDpioGroup` and `LiteLEDpioLane` class implementations — multi-strip PARLIO driver
+
+**Responsibilities:**
+
+- Owns one PARLIO TX unit and one shared DMA bitstream buffer
+- Each strip is registered via `addStrip(gpio)` or `addStrip<LANE>(gpio)` before `begin()`
+- `begin()` allocates per-lane pixel colour buffers (PSRAM-aware) and the shared DMA buffer, creates the PARLIO TX unit, and registers all GPIOs with the Peripheral Manager
+- `show()` calls `parlio_group_flush()` and syncs brightness state
+- `LiteLEDpioLane` is a thin handle: all pixel methods delegate to `ll_strip_pixels`; `show()` delegates to the parent group
+
+**Key Classes:**
+
+```cpp
+class LiteLEDpioGroup {
+    LiteLEDpioGroup(led_strip_type_t led_type, size_t length, bool rgbw);
+    LiteLEDpioLane &addStrip(uint8_t gpio);            // sequential lane assignment
+    template<uint8_t LANE>
+    LiteLEDpioLane &addStrip(uint8_t gpio);            // explicit lane (compile-time check)
+    esp_err_t begin(ll_psram_t psram_flag = PSRAM_DISABLE);
+    esp_err_t show();
+    esp_err_t brightness(uint8_t bright, bool show = false);
+    LiteLEDpioLane &operator[](uint8_t lane);
+};
+
+class LiteLEDpioLane {
+    esp_err_t show();                // delegates to parent group
+    esp_err_t setPixel(...);
+    esp_err_t fill(...);
+    esp_err_t clear(bool show = false);
+    // ... same pixel API as LiteLED / LiteLEDpio
+};
+```
+
+**Constraints:**
+
+- All strips must share the same LED type, length, and RGBW flag
+- Maximum strips: `PARLIO_TX_UNIT_MAX_DATA_WIDTH` (8 on C6/H2, 16 on P4)
+- Only one `LiteLEDpioGroup` (or `LiteLEDpio`) active at a time on C6/H2
+
+**Dependencies:**
+
+- `LiteLED.h` (class declarations, `parlio_group_cfg_t`)
+- `ll_parlio_core.h` (`parlio_group_install`, `parlio_group_flush`, `parlio_group_free`)
+- `ll_strip_pixels.h` (pixel operations delegated from `LiteLEDpioLane`)
+- `esp32-hal-periman.h` (GPIO registration)
 
 ---
 
@@ -553,6 +624,24 @@ User Code
               └─> parlio_tx_unit_wait_all_done() (blocking)
 ```
 
+### Pixel Update Flow (PARLIO Group)
+
+```
+User Code
+  └─> laneRef.setPixel(n, r, g, b)            ← per-lane pixel write
+      └─> led_strip_set_pixel() [ll_strip_pixels]   ← same shared layer
+  └─> strips.show()  (or laneRef.show())
+      └─> LiteLEDpioGroup::show() [LiteLEDpioGroup.cpp]
+          └─> parlio_group_flush() [ll_parlio_core]
+              ├─> memset(DMA buffer, 0)
+              ├─> For each assigned lane N:
+              │   └─> For each pixel byte:
+              │       ├─> scale8_video() [llrgb]
+              │       └─> buf[offset+s] |= (sample_bit << N)
+              └─> parlio_tx_unit_transmit() (ESP-IDF DMA, all lanes)
+                  └─> parlio_tx_unit_wait_all_done() (blocking)
+```
+
 ### Cleanup Flow (RMT)
 
 ```
@@ -587,17 +676,19 @@ User Code
 | Module | Calls | Called By | Key Responsibility |
 |--------|-------|-----------|-------------------|
 | `LiteLED` | All RMT modules, Peripheral Manager | User code | RMT public API |
-| `LiteLEDpio` | PARLIO modules, `ll_strip_pixels`, Peripheral Manager | User code | PARLIO public API |
+| `LiteLEDpio` | PARLIO modules, `ll_strip_pixels`, Peripheral Manager | User code | PARLIO single-strip API |
+| `LiteLEDpioGroup` | `ll_parlio_core` (group), `ll_strip_pixels`, Peripheral Manager | User code | PARLIO multi-strip API |
+| `LiteLEDpioLane` | `ll_strip_pixels`, parent `LiteLEDpioGroup` | User code / `LiteLEDpioGroup` | Per-lane pixel handle |
 | `llrmt` | All ll_* RMT modules | `LiteLED` | RMT module aggregation |
 | `llparlio` | `ll_led_timings`, `ll_parlio_core` | `LiteLEDpio` | PARLIO module aggregation |
 | `ll_led_timings` | None | `ll_encoder`, `ll_strip_pixels`, `ll_parlio_core` | Data provider (RMT + PARLIO) |
 | `ll_priority` | None | `ll_strip_core` | RMT priority tracking |
 | `ll_encoder` | `llrgb`, `ll_led_timings` | ESP-IDF RMT (interrupt) | RMT data encoding |
 | `ll_strip_core` | `ll_priority`, `ll_encoder` | `LiteLED` | RMT lifecycle management |
-| `ll_parlio_core` | `llrgb`, `ll_led_timings` | `LiteLEDpio` | PARLIO lifecycle + DMA encoding |
-| `ll_strip_pixels` | `ll_led_timings` | `LiteLED`, `LiteLEDpio` | Shared pixel operations |
+| `ll_parlio_core` | `llrgb`, `ll_led_timings` | `LiteLEDpio`, `LiteLEDpioGroup` | PARLIO lifecycle + DMA encoding |
+| `ll_strip_pixels` | `ll_led_timings` | `LiteLED`, `LiteLEDpio`, `LiteLEDpioLane` | Shared pixel operations |
 | `ll_registry` | Peripheral Manager | `LiteLED` | Minimal RMT instance tracking |
-| `Peripheral Manager` | None | `LiteLED`, `LiteLEDpio`, `ll_registry` | GPIO conflict prevention |
+| `Peripheral Manager` | None | `LiteLED`, `LiteLEDpio`, `LiteLEDpioGroup`, `ll_registry` | GPIO conflict prevention |
 | `llrgb` | None | `ll_encoder`, `ll_parlio_core`, User code | Color math |
 
 ---
@@ -654,12 +745,15 @@ Modules depend only on what they need:
 
 ## Version History
 
-**v3.1.0** *(pending release)*
-- Added PARLIO driver (`LiteLEDpio`) targeting ESP32-C6 and other PARLIO-capable SoCs
-- New files: `LiteLEDpio.cpp`, `ll_parlio_core.h`, `ll_parlio_core.cpp`, `llparlio.h`
-- Modified: `LiteLED.h` (added `parlio_strip_cfg_t`, `LiteLEDpio` class), `ll_led_timings.h` (added PARLIO timing table)
-- Encoding uses `data_width=8` to avoid DMA endianness corruption present with `data_width=1`
+**v3.1.0**
+- Added PARLIO single-strip driver (`LiteLEDpio`) targeting ESP32-C6 and other PARLIO-capable SoCs
+- Added PARLIO multi-strip driver (`LiteLEDpioGroup` / `LiteLEDpioLane`) — up to 8 independent strips driven simultaneously from one PARLIO TX unit via per-bit-lane DMA encoding
+- New files: `LiteLEDpio.cpp`, `LiteLEDpioGroup.cpp`, `ll_parlio_core.h`, `ll_parlio_core.cpp`, `llparlio.h`
+- Modified: `LiteLED.h` (added `parlio_strip_cfg_t`, `parlio_lane_t`, `parlio_group_cfg_t`, `LiteLEDpio`, `LiteLEDpioLane`, `LiteLEDpioGroup` classes and structs), `ll_led_timings.h` (added PARLIO timing table)
+- Single-strip encoding uses `data_width=8` to avoid DMA endianness corruption
+- Group encoder ORs per-lane sample bits into shared DMA bytes (`buf[off+s] |= bit << lane`)
 - All PARLIO code guarded by `#if SOC_PARLIO_SUPPORTED` for safe multi-target builds
+- Hardware-validated on XIAO ESP32-C6, arduino-esp32 3.3.7, IDF v5.5.2
 
 **v3.0.0**
 - Initial release for library version 3.0.0

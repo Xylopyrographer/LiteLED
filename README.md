@@ -1,12 +1,12 @@
 # LiteLED
 
-## v3.0.1
+## v3.1.0
 
 ## What is it?
 
 LiteLED is an arduino-esp32 library for the Espressif ESP32 series of SoC's for controlling WS2812B, SK6812, APA106 and SM16703 intelligent "clockless" RGB colour LED's.
 
-It provides hardware-accelerated LED control with support for driving multiple LED strips, arbitrary colour orders, DMA transfers, interrupt priority, and buffer allocation to either internal RAM or PSRAM.
+It provides hardware-accelerated LED control via the **RMT** peripheral (`LiteLED`) or the **PARLIO** parallel-IO peripheral (`LiteLEDpio` / `LiteLEDpioGroup`). Supports driving multiple LED strips, arbitrary colour orders, DMA transfers, interrupt priority, and buffer allocation to either internal RAM or PSRAM.
 
 
 ## Features
@@ -25,7 +25,13 @@ It provides hardware-accelerated LED control with support for driving multiple L
 
 **Multi-Display Support**
 
-- Up to eight LED strips can be driven.
+- Up to eight LED strips can be driven independently via the RMT driver.
+- With `LiteLEDpioGroup` (PARLIO), multiple strips are driven simultaneously from a single PARLIO TX unit with perfectly synchronised output and zero per-strip CPU overhead.
+
+**PARLIO Driver**
+
+- `LiteLEDpio`: PARLIO-based single-strip driver, API-identical to `LiteLED`. Switch drivers with a single type change.
+- `LiteLEDpioGroup`: Multi-strip PARLIO driver. Register up to 8 strips on independent bit-lanes; one `show()` transmits all lanes in a single DMA transfer. Ideal for synchronised LED matrix or multi-zone setups.
 
 **Configurable Color Order**
 
@@ -65,6 +71,7 @@ LiteLED has been tested on the following SoC's:
 
 * ESP32
 * ESP32-C3
+* ESP32-C6  *(includes PARLIO driver validation)*
 * ESP32-S2
 * ESP32-S3
 
@@ -124,6 +131,13 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.1.0
+
+- Feat: Add `LiteLEDpio` class — PARLIO-backed LED strip driver for SoCs with `SOC_PARLIO_SUPPORTED` (ESP32-C6, ESP32-H2, ESP32-P4). API-identical to `LiteLED`; switch drivers by changing one type declaration.
+- Feat: Add `LiteLEDpioGroup` and `LiteLEDpioLane` classes — drive up to 8 independent LED strips simultaneously from a single PARLIO TX unit using per-bit-lane DMA encoding. Single `show()` transmits all lanes in lock-step.
+- Feat: Add `multi_strip_parlio` example sketch.
+- PARLIO driver hardware-validated on XIAO ESP32-C6 (arduino-esp32 3.3.7, IDF v5.5.2).
 
 ### v3.0.1
 

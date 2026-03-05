@@ -1,32 +1,33 @@
 #class (KEYWORD1)
 LiteLED	KEYWORD1
+LiteLEDpio	KEYWORD1
+LiteLEDpioGroup	KEYWORD1
+LiteLEDpioLane	KEYWORD1
 LiteLED_Utils KEYWORD1
 
 #function and method (KEYWORD2)
+addStrip	KEYWORD2
 begin	KEYWORD2
 brightness	KEYWORD2
 clear	KEYWORD2
 fill	KEYWORD2
 fillRandom	KEYWORD2
-getActiveInstanceCount  KEYWORD2
+getActiveInstanceCount	KEYWORD2
 getBrightness	KEYWORD2
-getGpioPin  KEYWORD2
+getGpioPin	KEYWORD2
 getPixel	KEYWORD2
 getPixelC	KEYWORD2
-isDmaSupported KEYWORD2
-isPrioritySupported KEYWORD2
+isDmaSupported	KEYWORD2
+isPrioritySupported	KEYWORD2
+isValid	KEYWORD2
 resetOrder	KEYWORD2
-resetOrder  KEYWORD2
 setOrder	KEYWORD2
-setOrder    KEYWORD2
 setPixel	KEYWORD2
 setPixels	KEYWORD2
 show	KEYWORD2
 
 #constant (LITERAL1)
-#LITERAL_NAME	LITERAL1
 DMA_DEFAULT	LITERAL1
-DMA_DEFAULT LITERAL1
 DMA_OFF	LITERAL1
 DMA_ON	LITERAL1
 LED_STRIP_APA106	LITERAL1
