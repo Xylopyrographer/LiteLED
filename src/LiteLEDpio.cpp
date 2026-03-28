@@ -6,7 +6,6 @@
 
 #include <Arduino.h>
 #include "LiteLED.h"
-#include "llparlio.h"
 #include "ll_strip_pixels.h"
 
 #ifdef __cplusplus
@@ -17,7 +16,12 @@ extern "C" {
 }
 #endif
 
+#ifndef SOC_PARLIO_SUPPORTED
+    #define SOC_PARLIO_SUPPORTED 0
+#endif
+
 #if SOC_PARLIO_SUPPORTED
+#include "llparlio.h"
 
 // -------------------------------------------------------------------------
 // Peripheral Manager bus type for PARLIO TX.
