@@ -1,6 +1,6 @@
 # LiteLED
 
-## v3.1.0
+## v3.1.1
 
 ## What is it?
 
@@ -149,6 +149,10 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.1.1
+
+- Fix: The library was incorrectly invoking the PARLIO driver for SOC's without that peripheral.
 
 ### v3.1.0
 
