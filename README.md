@@ -1,6 +1,6 @@
 # LiteLED
 
-## v3.1.1
+## v3.1.2
 
 ## What is it?
 
@@ -149,6 +149,10 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.1.2
+
+- Fix: Add missing PARLIO back end integration with the arduino-esp32 Peripheral Manager.
 
 ### v3.1.1
 

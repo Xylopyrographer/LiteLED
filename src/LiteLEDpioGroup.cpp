@@ -301,6 +301,14 @@ esp_err_t LiteLEDpioGroup::begin( ll_psram_t psram_flag ) {
         return res;
     }
 
+    // ll_parlio_periman_begin() handles deinit callback registration and
+    // instance tracking only when a dedicated PARLIO bus type is available.
+    // On the GPIO fallback path it is a no-op (NULL bus handle means periman
+    // never calls a deinit callback, leaving gpioDetachBus undisturbed).
+    // Must be called before the GPIO loop so the callback can fire correctly
+    // if periman reassigns any pin mid-loop.
+    ll_parlio_periman_begin( _groupCfg.parlio_chan, &_valid );
+
     // Register all GPIOs with the Peripheral Manager.
     for ( uint8_t n = 0; n < PARLIO_TX_UNIT_MAX_DATA_WIDTH; n++ ) {
         if ( !_groupCfg.lanes[ n ].assigned ) {
@@ -308,7 +316,7 @@ esp_err_t LiteLEDpioGroup::begin( ll_psram_t psram_flag ) {
         }
         uint8_t gpio = _groupCfg.lanes[ n ].strip.gpio;
         if ( !perimanSetPinBus( gpio, LL_PARLIO_BUS_TYPE,
-                                ( void * )_groupCfg.parlio_chan, -1, -1 ) ) {
+                                ll_parlio_bus_handle( _groupCfg.parlio_chan ), -1, -1 ) ) {
             log_d( "LiteLEDpioGroup::begin: Peripheral Manager registration failed for GPIO %u", gpio );
             // Unregister any already-registered pins and roll back hardware.
             for ( uint8_t k = 0; k < n; k++ ) {
@@ -317,6 +325,9 @@ esp_err_t LiteLEDpioGroup::begin( ll_psram_t psram_flag ) {
                                       ESP32_BUS_TYPE_INIT, NULL, -1, -1 );
                 }
             }
+            // Safety net: remove registry entry (the callback may not have fired
+            // if n == 0 and no GPIO was yet registered in periman).
+            ll_parlio_periman_end( _groupCfg.parlio_chan );
             parlio_group_free( &_groupCfg );
             return ESP_ERR_INVALID_STATE;
         }
@@ -394,6 +405,8 @@ esp_err_t LiteLEDpioGroup::_free() {
                               ESP32_BUS_TYPE_INIT, NULL, -1, -1 );
         }
     }
+    // Safety net: ensure registry entry is removed even if a periman call failed.
+    ll_parlio_periman_end( _groupCfg.parlio_chan );
 
     return parlio_group_free( &_groupCfg );
 }
