@@ -12,16 +12,10 @@
 #include <string.h>
 
 // -------------------------------------------------------------------------
-// Peripheral Manager PARLIO bus type
-// arduino-esp32 may not yet define ESP32_BUS_TYPE_PARLIO_TX on all
-// versions; fall back to GPIO type so the pin is still marked in-use.
+// Peripheral Manager PARLIO bus type — defined in ll_parlio_core.h
+// (LL_PARLIO_BUS_TYPE resolves to ESP32_BUS_TYPE_PARLIO_TX when available,
+//  falling back to ESP32_BUS_TYPE_GPIO on all current arduino-esp32 releases.)
 // -------------------------------------------------------------------------
-#ifdef ESP32_BUS_TYPE_PARLIO_TX
-    #define LL_PARLIO_BUS_TYPE  ESP32_BUS_TYPE_PARLIO_TX
-#else
-    #define LL_PARLIO_BUS_TYPE  ESP32_BUS_TYPE_GPIO
-#endif
-
 // Utility macros — identical names to ll_strip_core.h so they read naturally
 #define PIO_COLOR_SIZE( strip ) ( 3 + ( (strip)->is_rgbw != 0 ) )
 #define PIO_PIXEL_SIZE( strip ) ( PIO_COLOR_SIZE( strip ) * (strip)->length )
@@ -532,6 +526,107 @@ esp_err_t parlio_group_free( parlio_group_cfg_t *cfg ) {
         }
     }
     return ESP_OK;
+}
+
+// --------------------------------------------------------------------------
+// PARLIO instance registry — Peripheral Manager deinit support
+//
+// Maps parlio_tx_unit_handle_t → bool* (the owning instance's valid flag).
+// ll_parlio_deinit_cb is registered with the Peripheral Manager so that
+// perimanSetPinBus(..., ESP32_BUS_TYPE_INIT, ...) can succeed when releasing
+// a PARLIO-owned GPIO.  Without this, periman refuses to clear the GPIO
+// because no deinit callback is registered for LL_PARLIO_BUS_TYPE, which
+// permanently blocks any subsequent begin() on the same GPIO.
+// --------------------------------------------------------------------------
+
+static struct {
+    parlio_tx_unit_handle_t chan;
+    bool                   *valid_flag;
+} s_parlio_inst[ LL_PARLIO_MAX_INSTANCES ];
+
+static bool s_parlio_inst_initialized = false;
+
+void ll_parlio_register_instance( parlio_tx_unit_handle_t chan, bool *valid_flag ) {
+    if ( !s_parlio_inst_initialized ) {
+        memset( s_parlio_inst, 0, sizeof( s_parlio_inst ) );
+        s_parlio_inst_initialized = true;
+    }
+    // Update if already registered (e.g., begin() called without a matching free()).
+    for ( int i = 0; i < LL_PARLIO_MAX_INSTANCES; i++ ) {
+        if ( s_parlio_inst[ i ].chan == chan ) {
+            s_parlio_inst[ i ].valid_flag = valid_flag;
+            return;
+        }
+    }
+    // Add a new entry in the first empty slot.
+    for ( int i = 0; i < LL_PARLIO_MAX_INSTANCES; i++ ) {
+        if ( s_parlio_inst[ i ].chan == NULL ) {
+            s_parlio_inst[ i ].chan       = chan;
+            s_parlio_inst[ i ].valid_flag = valid_flag;
+            return;
+        }
+    }
+    log_w( "ll_parlio_register_instance: registry full, instance not tracked" );
+}
+
+void ll_parlio_unregister_instance( parlio_tx_unit_handle_t chan ) {
+    for ( int i = 0; i < LL_PARLIO_MAX_INSTANCES; i++ ) {
+        if ( s_parlio_inst[ i ].chan == chan ) {
+            s_parlio_inst[ i ].chan       = NULL;
+            s_parlio_inst[ i ].valid_flag = NULL;
+            return;
+        }
+    }
+}
+
+bool ll_parlio_deinit_cb( void *bus_handle ) {
+    parlio_tx_unit_handle_t chan = ( parlio_tx_unit_handle_t )bus_handle;
+    for ( int i = 0; i < LL_PARLIO_MAX_INSTANCES; i++ ) {
+        if ( s_parlio_inst[ i ].chan == chan ) {
+            if ( s_parlio_inst[ i ].valid_flag ) {
+                *s_parlio_inst[ i ].valid_flag = false;
+            }
+            s_parlio_inst[ i ].chan       = NULL;
+            s_parlio_inst[ i ].valid_flag = NULL;
+            break;
+        }
+    }
+    return true;
+}
+
+// -------------------------------------------------------------------------
+// ll_parlio_periman_begin / ll_parlio_periman_end
+//
+// Public wrappers called by LiteLEDpio / LiteLEDpioGroup.
+//
+// When ESP32_BUS_TYPE_PARLIO_TX is available (dedicated bus type):
+//   begin() registers the deinit callback with periman (idempotent) and
+//   adds chan → valid_flag to our instance registry so the callback can
+//   mark the instance invalid if periman forcibly reassigns the GPIO.
+//   end() removes the registry entry as a cleanup safety net.
+//
+// When falling back to ESP32_BUS_TYPE_GPIO (all current arduino-esp32 ≤ 3.3.8):
+//   begin() and end() are no-ops.  ll_parlio_bus_handle() returns NULL, so
+//   periman stores NULL as the bus handle and will never call a deinit
+//   callback when the pin is cleared — no registration is needed and
+//   arduino-esp32's own gpioDetachBus callback is left undisturbed.
+// -------------------------------------------------------------------------
+void ll_parlio_periman_begin( parlio_tx_unit_handle_t chan, bool *valid_flag ) {
+    #ifdef ESP32_BUS_TYPE_PARLIO_TX
+    perimanSetBusDeinit( LL_PARLIO_BUS_TYPE, ll_parlio_deinit_cb );
+    ll_parlio_register_instance( chan, valid_flag );
+    #else
+    ( void )chan;
+    ( void )valid_flag;
+    #endif
+}
+
+void ll_parlio_periman_end( parlio_tx_unit_handle_t chan ) {
+    #ifdef ESP32_BUS_TYPE_PARLIO_TX
+    ll_parlio_unregister_instance( chan );
+    #else
+    ( void )chan;
+    #endif
 }
 
 #endif /* SOC_PARLIO_SUPPORTED */
