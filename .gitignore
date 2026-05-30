@@ -6,3 +6,6 @@ support/
 
 # macOS metadata
 .DS_Store
+
+# Project context / working notes — local only
+pr_chat.md

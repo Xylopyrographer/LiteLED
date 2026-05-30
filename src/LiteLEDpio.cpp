@@ -89,15 +89,20 @@ esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length, bool auto_w ) {
         return res;
     }
 
+    // ll_parlio_periman_begin() handles deinit callback registration and
+    // instance tracking only when a dedicated PARLIO bus type is available.
+    // On the GPIO fallback path it is a no-op (NULL bus handle means periman
+    // never calls a deinit callback, leaving gpioDetachBus undisturbed).
     if ( !perimanSetPinBus( data_pin, LL_PARLIO_BUS_TYPE,
-                            ( void * )parlioCfg.parlio_chan, -1, -1 ) ) {
+                            ll_parlio_bus_handle( parlioCfg.parlio_chan ), -1, -1 ) ) {
         log_d( "LiteLEDpio: Peripheral Manager registration failed for GPIO %u", data_pin );
         parlio_strip_free( &theStrip, &parlioCfg );
         return ESP_ERR_INVALID_STATE;
     }
     perimanSetPinBusExtraType( data_pin, "LiteLEDpio" );
-
     valid_instance = true;
+    ll_parlio_periman_begin( parlioCfg.parlio_chan, &valid_instance );
+
     return ESP_OK;
 }
 
@@ -148,14 +153,15 @@ esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length,
     }
 
     if ( !perimanSetPinBus( data_pin, LL_PARLIO_BUS_TYPE,
-                            ( void * )parlioCfg.parlio_chan, -1, -1 ) ) {
+                            ll_parlio_bus_handle( parlioCfg.parlio_chan ), -1, -1 ) ) {
         log_d( "LiteLEDpio: Peripheral Manager registration failed for GPIO %u", data_pin );
         parlio_strip_free( &theStrip, &parlioCfg );
         return ESP_ERR_INVALID_STATE;
     }
     perimanSetPinBusExtraType( data_pin, "LiteLEDpio" );
-
     valid_instance = true;
+    ll_parlio_periman_begin( parlioCfg.parlio_chan, &valid_instance );
+
     return ESP_OK;
 }
 
@@ -295,9 +301,9 @@ esp_err_t LiteLEDpio::resetOrder() {
 // -------------------------------------------------------------------------
 bool LiteLEDpio::isValid() const {
     if ( !valid_instance ) {
-        return false;
-    }
-    return ( theStrip.buf != NULL && parlioCfg.parlio_chan != NULL );
+    return false;
+}
+return ( theStrip.buf != NULL && parlioCfg.parlio_chan != NULL );
 }
 
 bool LiteLEDpio::isGpioAvailable( uint8_t gpio_pin ) {
@@ -330,6 +336,8 @@ esp_err_t LiteLEDpio::free() {
                    theStrip.gpio );
         }
     }
+    // Safety net: ensure registry entry is removed even if periman failed.
+    ll_parlio_periman_end( parlioCfg.parlio_chan );
 
     return parlio_strip_free( &theStrip, &parlioCfg );
 }
