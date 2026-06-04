@@ -1,6 +1,6 @@
 //
 /*
-    ESP32 RMT-based driver for various types of RGB LED strips
+    ESP32 driver library for various types of RGB LED strips using the RMT and PARLIO peripherals.
 */
 
 #ifndef __LITELED_H__
