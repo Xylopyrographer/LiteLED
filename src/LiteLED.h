@@ -1,10 +1,21 @@
 //
 /*
-    ESP32 driver library for various types of RGB LED strips using the RMT and PARLIO peripherals.
+    ESP32 driver library for various types of clockless RGB LED strips using the RMT and PARLIO peripherals.
 */
 
 #ifndef __LITELED_H__
 #define __LITELED_H__
+
+// version defines - update these when making a new release
+#define LITELED_VERSION_MAJOR 3
+#define LITELED_VERSION_MINOR 1
+#define LITELED_VERSION_PATCH 2
+
+// do not change the following 4 macros - these are used to construct the version string and number from the major, minor and patch defines above
+#define _LL_STR(x)          #x
+#define _LL_VER(a, b, c)    _LL_STR(a) "." _LL_STR(b) "." _LL_STR(c)
+#define LITELED_VERSION_STR _LL_VER( LITELED_VERSION_MAJOR, LITELED_VERSION_MINOR, LITELED_VERSION_PATCH )
+#define LITELED_VERSION     ( LITELED_VERSION_MAJOR * 10000 + LITELED_VERSION_MINOR * 100 + LITELED_VERSION_PATCH )
 
 #include <Arduino.h>
 
