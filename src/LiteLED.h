@@ -8,8 +8,8 @@
 
 // version defines - update these when making a new release
 #define LITELED_VERSION_MAJOR 3
-#define LITELED_VERSION_MINOR 1
-#define LITELED_VERSION_PATCH 2
+#define LITELED_VERSION_MINOR 2
+#define LITELED_VERSION_PATCH 0
 
 // do not change the following 4 macros - these are used to construct the version string and number from the major, minor and patch defines above
 #define _LL_STR(x)          #x

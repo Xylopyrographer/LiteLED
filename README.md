@@ -1,6 +1,6 @@
 # LiteLED
 
-## v3.1.2
+## v3.2.0
 
 ## What is it?
 
@@ -102,13 +102,15 @@ The table below summarizes compatibility of the RMT driver with arduino-esp32 co
 |  2.0.3 to 2.0.17 |                 1.2.1                |          |
 |  3.0.0 to 3.0.2  |                 None                 |     1    |
 |  3.0.3 to 3.0.7  |                 1.2.1                |     2    |
-|  3.1.0 and later |       2.0.0 and greater              |     3    |
+|   3.1.0 < 4.0    |             2.0.0 and greater        |     3    |
+|   4.0 and later  |                 3.2.0                |     4    |
 
 **Notes:**
 
 1. Not compatible.
 2. Requires the `-DESP32_ARDUINO_NO_RGB_BUILTIN` workaround discussed on the arduino-esp32 GitHub site [here](https://github.com/espressif/arduino-esp32/pull/9941) and as shown in the example [here](https://github.com/espressif/arduino-esp32/tree/master/libraries/ESP32/examples/RMT/Legacy_RMT_Driver_Compatible).
 3. Fully compatible. **But highly recommend using v3+**.
+4. At the time of writing, arduino-esp32 core v4 is in alpha but as it is based on  esp-idf v6, LiteLED version 3.1.3 is required at minimum.
 
 
 #### PARLIO driver
@@ -149,6 +151,12 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.2.0
+
+- Fix: Remdiate breaking changes introduced by esp-idf v6.
+- Feat: Add LiteLED library version macros.
+- Feat: Add LiteLED libray version to the debug dump reports. 
 
 ### v3.1.2
 

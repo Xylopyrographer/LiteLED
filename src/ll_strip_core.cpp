@@ -294,6 +294,7 @@ void led_strip_debug_dump( led_strip_t *strip ) {
     if ( strip ) {
         log_printf( "\n" );
         log_printf( "============= LiteLED Debug Report =============\n" );
+        log_printf( "LiteLED version: %s\n", LITELED_VERSION_STR );
         log_printf( "LED strip object at: %p\n", strip );
         log_printf( "    type: %s\n", led_type[ strip->type ] );
         log_printf( "    is_rgbw: %d\n", strip->is_rgbw );
