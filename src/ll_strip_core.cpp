@@ -21,14 +21,16 @@ esp_err_t led_strip_init( led_strip_t *strip ) {
         .resolution_hz = RMT_LED_STRIP_RESOLUTION_HZ,
         .mem_block_symbols = LL_MEM_BLOCK_SIZE_DEFAULT,
         .trans_queue_depth = 4,  /* Number of transactions that can be pending in the background */
-#if LL_INT_PRIORITY_SUPPORT
+        #if LL_INT_PRIORITY_SUPPORT
         .intr_priority = 0,  /* Callback interrupt priority, default is 0 */
-#endif
+        #endif
         .flags = {
             .invert_out = 0,            /* Do not invert output */
             .with_dma = DMA_DEFAULT,    /* Do not use DMA by default */
-            .io_loop_back = 0,          /* No loopback */
-            .io_od_mode = 0,            /* Open drain */
+            #if ESP_IDF_VERSION_MAJOR < 6
+            .io_loop_back = 0,          /* removed in IDF 6.0 */
+            .io_od_mode = 0,            /* removed in IDF 6.0 */
+            #endif
         }
     };
 
@@ -56,16 +58,16 @@ esp_err_t led_strip_init_modify( led_strip_t *strip, ll_dma_t use_dma, ll_priori
     /* Sets user defined DMA and interrupt priority settings for the LED strip */
     esp_err_t res = ESP_OK;
 
-#if LL_INT_PRIORITY_SUPPORT
+    #if LL_INT_PRIORITY_SUPPORT
     strip->stripCfg.led_chan_config.intr_priority = priority;
     log_d( "Setting the RMT interrupt priority to %d.", priority );
-#else
+    #else
     // Interrupt priority setting not supported - use default (0)
     // This is not an error condition, just a limitation
     log_d( "Setting RMT interrupt priority not supported with this core version. Using default." );
-#endif
+    #endif
 
-#if LL_DMA_SUPPORT
+    #if LL_DMA_SUPPORT
     strip->stripCfg.led_chan_config.flags.with_dma = use_dma;
     log_d( "Setting the RMT DMA usage to %s.", use_dma ? "ON" : "OFF" );
     if ( use_dma ) {
@@ -76,11 +78,11 @@ esp_err_t led_strip_init_modify( led_strip_t *strip, ll_dma_t use_dma, ll_priori
         strip->stripCfg.led_chan_config.mem_block_symbols = ( size_t )LL_MEM_BLOCK_SIZE_DEFAULT;
         log_d( "RMT DMA disabled. Setting the memory block size to %d.", strip->stripCfg.led_chan_config.mem_block_symbols );
     }
-#else
+    #else
     strip->stripCfg.led_chan_config.flags.with_dma = DMA_OFF;
     strip->stripCfg.led_chan_config.mem_block_symbols = LL_MEM_BLOCK_SIZE_DEFAULT;
     log_d( "RMT DMA not supported on this ESP32 model. Disabling DMA." );
-#endif
+    #endif
 
     return res;
 }
@@ -91,7 +93,7 @@ esp_err_t led_strip_install( led_strip_t *strip ) {
 
     // Allocate buffer based on PSRAM preference
     if ( strip->use_psram ) {
-#if CONFIG_SPIRAM
+        #if CONFIG_SPIRAM
         // Check if PSRAM is actually available at runtime
         if ( psramFound() ) {
             // Try to allocate in PSRAM first
@@ -116,14 +118,14 @@ esp_err_t led_strip_install( led_strip_t *strip ) {
                 log_d( "LED buffer allocated in internal RAM (%d bytes)", buffer_size );
             }
         }
-#else
+        #else
         // PSRAM not compiled in
         log_d( "PSRAM requested but support not compiled in, using internal RAM" );
         strip->buf = ( uint8_t* )calloc( strip->length, COLOR_SIZE( strip ) );
         if ( strip->buf ) {
             log_d( "LED buffer allocated in internal RAM (%d bytes)", buffer_size );
         }
-#endif
+        #endif
     }
     else {
         // Use regular internal RAM allocation
@@ -140,7 +142,7 @@ esp_err_t led_strip_install( led_strip_t *strip ) {
 
     esp_err_t res = ESP_OK;
 
-#if LL_INT_PRIORITY_SUPPORT
+    #if LL_INT_PRIORITY_SUPPORT
     int original_priority = strip->stripCfg.led_chan_config.intr_priority;
 
     // Pre-flight conflict detection
@@ -164,14 +166,14 @@ esp_err_t led_strip_install( led_strip_t *strip ) {
         log_d( "Requested priority %s (%d) is available",
                ll_priority_to_string( original_priority ), original_priority );
     }
-#endif
+    #endif
 
     // Try to create RMT TX channel with the selected priority
     res = rmt_new_tx_channel( &strip->stripCfg.led_chan_config, &strip->stripCfg.led_chan );
 
     // If we still get a conflict despite pre-flight checks, use the original fallback mechanism
     if ( res == ESP_ERR_INVALID_ARG ) {
-#if LL_INT_PRIORITY_SUPPORT
+        #if LL_INT_PRIORITY_SUPPORT
         log_d( "Error: Unexpected priority conflict after pre-flight checks. Attempting to fallback..." );
 
         for ( int i = 0; i < LL_MAX_PRIORITY_ATTEMPTS; i++ ) {
@@ -192,14 +194,14 @@ esp_err_t led_strip_install( led_strip_t *strip ) {
                 }
             }
         }
-#endif
+        #endif
     }
 
     // Mark the priority as used if successful
     if ( res == ESP_OK ) {
-#if LL_INT_PRIORITY_SUPPORT
+        #if LL_INT_PRIORITY_SUPPORT
         ll_mark_priority_used( strip->stripCfg.led_chan_config.intr_priority );
-#endif
+        #endif
         log_d( "RMT TX channel created successfully with priority %s (%d)",
                ll_priority_to_string( strip->stripCfg.led_chan_config.intr_priority ),
                strip->stripCfg.led_chan_config.intr_priority );
@@ -229,9 +231,9 @@ esp_err_t led_strip_install( led_strip_t *strip ) {
 
     log_d( "LED strip sucessfully configured and installed." );
 
-#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_VERBOSE
+    #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_VERBOSE
     led_strip_debug_dump( strip );
-#endif
+    #endif
 
     return res;
 }
@@ -243,11 +245,11 @@ esp_err_t led_strip_free( led_strip_t *strip ) {
         return ESP_ERR_INVALID_ARG;
     }
 
-#if LL_INT_PRIORITY_SUPPORT
+    #if LL_INT_PRIORITY_SUPPORT
     // Release the interrupt priority before freeing resources
     int priority = strip->stripCfg.led_chan_config.intr_priority;
     ll_mark_priority_free( priority );
-#endif
+    #endif
 
     esp_err_t res = ESP_OK;
     if ( ( res = rmt_tx_wait_all_done( strip->stripCfg.led_chan, portMAX_DELAY ) ) != ESP_OK ) {
@@ -288,10 +290,11 @@ esp_err_t led_strip_flush( led_strip_t *strip ) {
 
 void led_strip_debug_dump( led_strip_t *strip ) {
     /* Dumps the LED strip configuration data to the debug monitor */
-#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_VERBOSE
+    #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_VERBOSE
     if ( strip ) {
         log_printf( "\n" );
         log_printf( "============= LiteLED Debug Report =============\n" );
+        log_printf( "LiteLED version: %s\n", LITELED_VERSION_STR );
         log_printf( "LED strip object at: %p\n", strip );
         log_printf( "    type: %s\n", led_type[ strip->type ] );
         log_printf( "    is_rgbw: %d\n", strip->is_rgbw );
@@ -305,15 +308,15 @@ void led_strip_debug_dump( led_strip_t *strip ) {
         log_printf( "    buf bytes: %d\n", PIXEL_SIZE( strip ) );
         // Check if buffer is in PSRAM or internal RAM
         if ( strip->buf ) {
-#if defined(SOC_EXTRAM_DATA_LOW) && defined(SOC_EXTRAM_DATA_HIGH)
+            #if defined(SOC_EXTRAM_DATA_LOW) && defined(SOC_EXTRAM_DATA_HIGH)
             bool is_psram = heap_caps_get_allocated_size( strip->buf ) > 0 &&
                             ( ( ( uint32_t )strip->buf >= SOC_EXTRAM_DATA_LOW ) &&
                               ( ( uint32_t )strip->buf < SOC_EXTRAM_DATA_HIGH ) );
             log_printf( "    buf location: %s\n", is_psram ? "PSRAM" : "Internal RAM" );
-#else
+            #else
             // ESP32-C3 and other variants without external RAM support
             log_printf( "    buf location: Internal RAM (no PSRAM support)\n" );
-#endif
+            #endif
         }
         log_printf( "    led_chan_config at: %p\n", &strip->stripCfg.led_chan_config );
         log_printf( "        .gpio_num: %d\n", strip->stripCfg.led_chan_config.gpio_num );
@@ -321,14 +324,16 @@ void led_strip_debug_dump( led_strip_t *strip ) {
         log_printf( "        .resolution_hz: %d\n", strip->stripCfg.led_chan_config.resolution_hz );
         log_printf( "        .mem_block_symbols: %d\n", strip->stripCfg.led_chan_config.mem_block_symbols );
         log_printf( "        .trans_queue_depth: %d\n", strip->stripCfg.led_chan_config.trans_queue_depth );
-#if LL_INT_PRIORITY_SUPPORT
+        #if LL_INT_PRIORITY_SUPPORT
         log_printf( "        .intr_priority: %d\n", strip->stripCfg.led_chan_config.intr_priority );
-#endif
+        #endif
         log_printf( "        .flags\n" );
         log_printf( "            .invert_out: %d\n", strip->stripCfg.led_chan_config.flags.invert_out );
         log_printf( "            .with_dma: %d\n", strip->stripCfg.led_chan_config.flags.with_dma );
+        #if ESP_IDF_VERSION_MAJOR < 6
         log_printf( "            .io_loop_back: %d\n", strip->stripCfg.led_chan_config.flags.io_loop_back );
         log_printf( "            .io_od_mode: %d\n", strip->stripCfg.led_chan_config.flags.io_od_mode );
+        #endif
         log_printf( "    led_tx_config:\n" );
         log_printf( "        .loop_count: %d\n", strip->stripCfg.led_tx_config.loop_count );
         log_printf( "        .flags\n" );
@@ -355,7 +360,7 @@ void led_strip_debug_dump( led_strip_t *strip ) {
     else {
         log_printf( "Error: LED strip object is NULL." );
     }
-#endif
+    #endif
 }
 
 //  --- EOF --- //

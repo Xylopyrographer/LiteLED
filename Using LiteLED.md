@@ -69,6 +69,10 @@
     * [PSRAM for Large Arrays](#psram-for-large-arrays)
         + [Instance Validation](#instance-validation)
 - [Utilities](#utilities)
+    * [Version Macros](#version-macros)
+        + [`LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`](#version-components)
+        + [`LITELED_VERSION_STR`](#liteled_version_str)
+        + [`LITELED_VERSION`](#liteled_version)
     * [LiteLED_Utils](#liteled_utils)
         + [`isDmaSupported()`](#isdmasupported)
         + [`isPrioritySupported()`](#isprioritysupported)
@@ -1799,6 +1803,73 @@ void loop() {
 <a name="utilities"></a>
 # Utilities
 
+<a name="version-macros"></a>
+## Version Macros
+
+LiteLED exposes its version number through a set of preprocessor macros defined near the top of `LiteLED.h`. These allow user code to perform compile-time version checks or include the version string in debug output.
+
+<a name="version-components"></a>
+### `LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`
+
+The three individual version components as integer literals.
+
+```cpp
+#define LITELED_VERSION_MAJOR  3
+#define LITELED_VERSION_MINOR  2
+#define LITELED_VERSION_PATCH  0
+```
+
+Use these for compile-time numeric comparisons:
+
+```cpp
+#if LITELED_VERSION_MAJOR < 3
+    #error "LiteLED 3.x or later required"
+#endif
+```
+
+---
+
+<a name="liteled_version_str"></a>
+### `LITELED_VERSION_STR`
+
+A string literal of the form `"MAJOR.MINOR.PATCH"` constructed from the three component macros above.
+
+```cpp
+#define LITELED_VERSION_STR  "3.2.0"   // (constructed via macro concatenation)
+```
+
+**Example:**
+
+```cpp
+Serial.printf("LiteLED version: %s\n", LITELED_VERSION_STR);
+// prints: LiteLED version: 3.2.0
+```
+
+This string also appears as the first line of every `_debug_dump` verbose log report.
+
+---
+
+<a name="liteled_version"></a>
+### `LITELED_VERSION`
+
+A single integer encoding the full version as `MAJOR * 10000 + MINOR * 100 + PATCH`.
+
+```cpp
+#define LITELED_VERSION  ( LITELED_VERSION_MAJOR * 10000 + LITELED_VERSION_MINOR * 100 + LITELED_VERSION_PATCH )
+```
+
+For version 3.2.0 this evaluates to `30200`. Useful for runtime numeric comparisons:
+
+```cpp
+if (LITELED_VERSION < 30200) {
+    // older API
+}
+```
+
+> **Note:** Do not change the four `_LL_STR` / `_LL_VER` helper macros that follow these defines. They are the stringification machinery that builds `LITELED_VERSION_STR` and are not intended for direct use.
+
+---
+
 <a name="liteled_utils"></a>
 ## LiteLED_Utils
 
@@ -2764,6 +2835,10 @@ void loop() {
 
 <a name="version-history"></a>
 # Version History
+
+**v3.2.0**
+- Added version macros: `LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`, `LITELED_VERSION_STR`, `LITELED_VERSION`.
+- Debug dump reports (`_debug_dump`) now print the LiteLED version as the first line.
 
 **v3.1.0**
 - Added support for using the ESP32 PARLIO peripheral as the driver.
