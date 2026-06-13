@@ -20,7 +20,7 @@
     Requires
     --------
     - arduino-esp32 3.0.0 or later (IDF 5.x PARLIO TX API)
-    - LiteLED library 3.1.0 or later
+    - LiteLED library 3.2.0 or later
     - ESP32 SoC with SOC_PARLIO_SUPPORTED (e.g., ESP32-C6, ESP32-H2)
 */
 
