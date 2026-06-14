@@ -2859,7 +2859,7 @@ void loop() {
 # Version History
 
 **v3.2.0**
-- Remdiated breaking changes introduced by esp-idf v6.
+- Remediated breaking changes introduced by esp-idf v6.
 - Added version macros: `LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`, `LITELED_VERSION_STR`, `LITELED_VERSION`.
 - Debug dump reports (`_debug_dump`) now print the LiteLED version as the first line.
 
