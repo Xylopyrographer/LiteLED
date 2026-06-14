@@ -40,6 +40,7 @@ LiteLED.h (Main Public API — RMT and PARLIO drivers)
 - Platform compatibility checks (ESP32, Arduino core version)
 - Hardware capability detection (RMT, DMA, interrupt priority support)
 - Public methods for LED strip control (begin, show, setPixel, fill, etc.)
+- Version macros (`LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`, `LITELED_VERSION_STR`, `LITELED_VERSION`)
 
 **Key Dependencies:**
 
@@ -744,6 +745,11 @@ Modules depend only on what they need:
 ---
 
 ## Version History
+
+**v3.2.0**
+- Added version macros to `LiteLED.h`: `LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`, `LITELED_VERSION_STR`, `LITELED_VERSION`
+- Remediated breaking change introduced by esp-idf v6: `io_loop_back` and `io_od_mode` fields were removed from `rmt_tx_channel_config_t.flags` in esp-idf v6; both are now guarded with `#if ESP_IDF_VERSION_MAJOR < 6` in `ll_strip_core.cpp`
+- Debug dump reports (`led_strip_debug_dump`, `parlio_strip_debug_dump`) now print `LITELED_VERSION_STR` as the first line of output
 
 **v3.1.0**
 - Added PARLIO single-strip driver (`LiteLEDpio`) targeting ESP32-C6 and other PARLIO-capable SoCs

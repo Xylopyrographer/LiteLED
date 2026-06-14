@@ -249,6 +249,7 @@ void parlio_strip_debug_dump( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
         const parlio_led_params_t *p = &parlio_led_params[ strip->type ];
         log_printf( "\n" );
         log_printf( "========= LiteLED PARLIO Debug Report =========\n" );
+        log_printf( "LiteLED version: %s\n", LITELED_VERSION_STR );
         log_printf( "led_strip_t at: %p\n", strip );
         log_printf( "    type: %u, is_rgbw: %d, auto_w: %d\n",
                     strip->type, strip->is_rgbw, strip->auto_w );
