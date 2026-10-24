@@ -137,8 +137,8 @@ static const led_params_t led_sm16703 = {
 
 static const led_params_t led_sk6812 = {
     .led_0 = sk6812_zero,
-    .led_1 = sm16703_one,
-    .led_reset = sm16703_reset,
+    .led_1 = sk6812_one,
+    .led_reset = sk6812_reset,
     .order = ORDER_GRB
 };
 
