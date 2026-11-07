@@ -88,6 +88,7 @@ enum led_strip_type_t {
     LED_STRIP_SK6812,
     LED_STRIP_APA106,
     LED_STRIP_SM16703,
+    LED_STRIP_CUSTOM,       /* user-supplied timing; see ll_custom_timing_t. RMT driver only. */
     LED_STRIP_TYPE_MAX
 };
 
@@ -119,6 +120,32 @@ typedef struct {
     color_order_t order;
 } led_params_t;
 
+// User-defined LED timing for LED types not covered by led_strip_type_t.
+// All times are in nanoseconds except reset_us (microseconds).
+//   bit 0 = T0H high then T0L low;  bit 1 = T1H high then T1L low
+// Each time is rounded to the nearest RMT tick (1 / resolution_hz).
+// The default 40 MHz resolution gives a 25 ns tick.
+#define LL_CUSTOM_DEFAULT_RESOLUTION_HZ 40000000UL
+typedef struct {
+    uint32_t t0h_ns = 0;
+    uint32_t t0l_ns = 0;
+    uint32_t t1h_ns = 0;
+    uint32_t t1l_ns = 0;
+    uint32_t reset_us = 0;
+    uint32_t resolution_hz = LL_CUSTOM_DEFAULT_RESOLUTION_HZ;   /* RMT driver only; PARLIO chooses its own clock */
+    uint32_t parlio_tolerance_ns = 25;  /* PARLIO driver only: max allowed error of any of T0H/T0L/T1H/T1L */
+} ll_custom_timing_t;
+
+// PARLIO timing: each LED bit is sent as a run of samples at clk_hz
+typedef struct {
+    uint32_t      clk_hz;           /* PARLIO output clock frequency (Hz) */
+    uint8_t       n0h, n0l;         /* samples high / low for LED data 0 */
+    uint8_t       n1h, n1l;         /* samples high / low for LED data 1 */
+    uint8_t       samples_per_bit;  /* samples per LED bit = max( n0h + n0l, n1h + n1l ); shorter bit is padded low */
+    uint32_t      reset_samples;    /* low samples appended after the data (reset / latch) */
+    color_order_t order;            /* LED colour order */
+} parlio_led_params_t;
+
 // PARLIO hardware configuration (used by LiteLEDpio only)
 #if SOC_PARLIO_SUPPORTED
 typedef struct {
@@ -139,6 +166,10 @@ typedef struct {
     bool auto_w;
     bool use_psram;
     led_strip_cfg_t stripCfg;
+    led_params_t params = {};       /* RMT timing + colour order; used only when type == LED_STRIP_CUSTOM */
+    parlio_led_params_t pio = {};   /* PARLIO timing + colour order; used only when type == LED_STRIP_CUSTOM */
+    uint32_t resolution_hz = 0;     /* RMT tick rate; 0 = library default (built-in types) */
+    esp_err_t timing_err = ESP_OK;  /* result of custom timing validation, reported by begin() */
 } led_strip_t;
 
 // PARLIO group structs — must follow led_strip_t (parlio_lane_t embeds one)
@@ -203,6 +234,14 @@ class LiteLED {
     // @param rgbw Set true if the strip is RGBW type
     // @return 'ESP_OK' on success
     LiteLED( led_strip_type_t led_type, bool rgbw );
+
+    // @brief Class constructor for an LED type not in led_strip_type_t. RMT driver only.
+    // @param timing User-defined bit and reset timing. See ll_custom_timing_t.
+    // @param order Colour order of the LED
+    // @param rgbw Set true if the strip is RGBW type
+    // @note Invalid timing (a time that rounds to 0 or exceeds the RMT range) is
+    //       reported as ESP_ERR_INVALID_ARG by begin().
+    LiteLED( const ll_custom_timing_t &timing, color_order_t order, bool rgbw );
     ~LiteLED();
 
     // @brief Initialize the strip
@@ -347,6 +386,16 @@ class LiteLEDpio {
     // @param led_type Enumerated value for the type of LEDs in the strip.
     // @param rgbw     Set true for RGBW type strips.
     LiteLEDpio( led_strip_type_t led_type, bool rgbw );
+
+    // @brief Class constructor for an LED type not in led_strip_type_t.
+    // @param timing User-defined timing. The PARLIO clock and samples per bit are chosen
+    //               automatically: the lowest clock at which T0H/T0L/T1H/T1L are each within
+    //               timing.parlio_tolerance_ns of the request. begin() returns
+    //               ESP_ERR_INVALID_ARG if no clock can meet the tolerance.
+    // @param order Colour order of the LED
+    // @param rgbw Set true if the strip is RGBW type
+    // @note Not supported by LiteLEDpioGroup.
+    LiteLEDpio( const ll_custom_timing_t &timing, color_order_t order, bool rgbw );
     ~LiteLEDpio();
 
     // @brief Initialize the strip.

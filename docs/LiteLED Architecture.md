@@ -111,7 +111,16 @@ extern led_timing_params_t led_params[4];  // Indexed by led_type_t
 - `LiteLED.h` (for type definitions)
 - ESP-IDF RMT driver headers
 
-**Relationship:** Provides timing constants consumed by encoder and core modules. Pure data, no functions.
+**Custom timing (v3.3.0):**
+
+- `LED_STRIP_CUSTOM` is the last LED type before `LED_STRIP_TYPE_MAX`. It has no entry in `led_params[]` or `parlio_led_params[]`.
+- `ll_strip_params( strip )` returns the RMT parameters for a strip: `strip->params` for `LED_STRIP_CUSTOM`, else `led_params[ strip->type ]`. The encoder and pixel code use it.
+- `ll_pio_params( strip )` does the same for PARLIO (`strip->pio` or `parlio_led_params[]`).
+- `ll_build_custom_params()` converts an `ll_custom_timing_t` to RMT symbols, rounding to the nearest tick, and returns `ESP_ERR_INVALID_ARG` if any time rounds to zero ticks or exceeds the 15-bit RMT duration field.
+- `ll_build_parlio_params()` chooses the PARLIO clock: the lowest of 2.5/4/5/8/10/16/20/40 MHz at which T0H/T0L/T1H/T1L each round to within `parlio_tolerance_ns`, with at most 64 samples per bit.
+- The RMT resolution is per strip (`strip->resolution_hz`; `0` means the 10 MHz default used by the built-in types).
+
+**Relationship:** Provides timing constants consumed by encoder and core modules. The custom timing builders are the only functions.
 
 ---
 
@@ -371,14 +380,25 @@ esp_err_t parlio_group_free   (parlio_group_cfg_t *gcfg);
 
 **Encoding (`data_width=8`, single-strip):**
 
-Each input byte is expanded to 24 DMA bytes (3 bytes per bit, 8 bits per byte).
-Only `data_gpio_nums[0]` (bit 0) is wired to the LED strip; bits 1–7 are
-routed to `GPIO_NUM_NC`, so no bit-packing or DMA endianness issues arise.
+Each input byte is expanded to `samples_per_bit × 8` DMA bytes (24 for the
+built-in types). Only `data_gpio_nums[0]` (bit 0) is wired to the LED strip;
+bits 1–7 are routed to `GPIO_NUM_NC`, so no bit-packing or DMA endianness
+issues arise.
+
+Timing is held per strip in a `parlio_led_params_t` as sample counts: `n0h`,
+`n0l`, `n1h`, `n1l`, plus `samples_per_bit` (the longer of the two bit periods;
+the shorter one is padded low), `clk_hz` and `reset_samples`. For each LED bit
+the encoder writes `nh` high samples then low samples up to `samples_per_bit`.
+The built-in types are `n0h/n0l/n1h/n1l = 1/2/2/1` at 2.5 MHz:
 
 ```
 LED bit 0  →  DMA bytes: 0x01 0x00 0x00  (T0H=400 ns, T0L=800 ns)
 LED bit 1  →  DMA bytes: 0x01 0x01 0x00  (T1H=800 ns, T1L=400 ns)
 ```
+
+A custom timing (`LiteLEDpio( timing, order, rgbw )`) gets its clock and counts
+from `ll_build_parlio_params()`; for example 325/925 ns at 40 MHz is `13/37/37/13`,
+50 samples per bit. `parlio_group_install()` rejects `LED_STRIP_CUSTOM`.
 
 **Multi-lane encoding (`parlio_group_flush`):**
 
@@ -745,6 +765,14 @@ Modules depend only on what they need:
 ---
 
 ## Version History
+
+**v3.3.0 (in development)**
+- Added custom LED timing for the RMT and PARLIO drivers: `LED_STRIP_CUSTOM`, `ll_custom_timing_t`, constructors `LiteLED( timing, order, rgbw )` and `LiteLEDpio( timing, order, rgbw )`
+- `led_strip_t` gains `params` (RMT), `pio` (PARLIO), `resolution_hz` and `timing_err`; the RMT resolution is now per strip
+- New in `ll_led_timings.h`: `ll_strip_params()`, `ll_pio_params()`, `ll_build_custom_params()`, `ll_build_parlio_params()`; `parlio_led_params_t` moved to `LiteLED.h`
+- The PARLIO encoder works from per-phase sample counts (`n0h`/`n0l`/`n1h`/`n1l`) instead of fixed 3-sample bit patterns, and the reset length is a per-strip `reset_samples`. The timing of the built-in types is unchanged
+- `LiteLEDpioGroup` rejects `LED_STRIP_CUSTOM`
+- Hardware-validated by RMT RX loopback on ESP32-PICO-D4 (RMT), ESP32-S3 (RMT) and XIAO ESP32-C6 (RMT and PARLIO)
 
 **v3.2.0**
 - Added version macros to `LiteLED.h`: `LITELED_VERSION_MAJOR`, `LITELED_VERSION_MINOR`, `LITELED_VERSION_PATCH`, `LITELED_VERSION_STR`, `LITELED_VERSION`

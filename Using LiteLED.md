@@ -88,6 +88,12 @@
     - [GPIO Management](#gpio-management)
     - [Best Practices for Multi-Display](#best-practices-for-multi-display)
     - [Multi-Display with the PARLIO Driver](#multi-display-with-the-parlio-driver)
+  - [Custom LED Timing](#custom-led-timing)
+    - [Timing Parameters](#timing-parameters)
+    - [RMT Driver](#custom-timing-rmt)
+    - [PARLIO Driver](#custom-timing-parlio)
+    - [Errors](#custom-timing-errors)
+    - [Verified Results](#custom-timing-verified)
   - [PSRAM for Large Arrays](#psram-for-large-arrays)
     - [Instance Validation](#instance-validation)
 - [Utilities](#utilities)
@@ -544,12 +550,15 @@ Supported LED strip types.
     LED_STRIP_SK6812         // SK6812 (GRB colour order, with RGBW support)
     LED_STRIP_APA106         // APA106 (RGB colour order)
     LED_STRIP_SM16703        // SM16703 (RGB colour order)
+    LED_STRIP_CUSTOM         // User supplied timing (see Custom LED Timing)
 
 ```
 
 **Description**:
 
 Defines the LED strip type, which determines timing parameters and default colour order.
+
+`LED_STRIP_CUSTOM` is not passed to the usual constructor. It is selected by the constructor that takes an [`ll_custom_timing_t`](#ll_custom_timing_t). See [Custom LED Timing](#custom-led-timing).
 
 ---
 
@@ -704,6 +713,27 @@ crgb_t white = 0xFFFFFF;
 
 ---
 
+<a name="ll_custom_timing_t"></a>
+## `ll_custom_timing_t`
+
+Bit and reset timing for an LED type that isn't one of the built-in types.
+
+```cpp
+typedef struct {
+    uint32_t t0h_ns;               // 0 bit: time high (ns)
+    uint32_t t0l_ns;               // 0 bit: time low (ns)
+    uint32_t t1h_ns;               // 1 bit: time high (ns)
+    uint32_t t1l_ns;               // 1 bit: time low (ns)
+    uint32_t reset_us;             // low time after the data, to latch (us)
+    uint32_t resolution_hz;        // RMT only. Tick = 1 / resolution_hz. Default 40000000 (25 ns)
+    uint32_t parlio_tolerance_ns;  // PARLIO only. Max error of each of the four times. Default 25
+} ll_custom_timing_t;
+```
+
+All members default to `0`, except `resolution_hz` (`40000000`) and `parlio_tolerance_ns` (`25`). Set the five timing members, at least. See [Custom LED Timing](#custom-led-timing).
+
+---
+
 <a name="library-api"></a>
 # Library API
 
@@ -729,6 +759,21 @@ LiteLEDpio(led_strip_type_t led_type, bool rgbw);
 |-----------|------|-------------|
 | `led_type` | `led_strip_type_t` | LED strip protocol (see [`led_strip_type_t`](#led_strip_type_t)) |
 | `rgbw` | `bool` | `true` for RGBW strips (e.g., SK6812 RGBW); `false` for RGB strips |
+
+**Custom timing — LiteLED (RMT) and LiteLEDpio (PARLIO single-strip)**
+
+```cpp
+LiteLED   (const ll_custom_timing_t &timing, color_order_t order, bool rgbw);
+LiteLEDpio(const ll_custom_timing_t &timing, color_order_t order, bool rgbw);
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `timing` | `ll_custom_timing_t` | Bit and reset timing (see [`ll_custom_timing_t`](#ll_custom_timing_t)) |
+| `order` | `color_order_t` | Colour order of the LED (see [`color_order_t`](#color_order_t)) |
+| `rgbw` | `bool` | `true` for RGBW strips; `false` for RGB strips |
+
+The timing is validated when `begin()` is called. If it can't be produced, `begin()` returns `ESP_ERR_INVALID_ARG`. See [Custom LED Timing](#custom-led-timing). `LiteLEDpioGroup` does not support custom timing.
 
 **LiteLEDpioGroup (PARLIO multi-strip)**
 
@@ -1774,6 +1819,123 @@ void loop() {
 
 ---
 
+<a name="custom-led-timing"></a>
+## Custom LED Timing
+
+If your LED isn't one of the built-in types, or the built-in timing doesn't suit it, you can supply the timing yourself. Take the values from the LED's datasheet.
+
+```cpp
+static const ll_custom_timing_t timing = {
+    .t0h_ns   = 325,    // 0 bit: high
+    .t0l_ns   = 925,    // 0 bit: low
+    .t1h_ns   = 925,    // 1 bit: high
+    .t1l_ns   = 325,    // 1 bit: low
+    .reset_us = 280     // latch time
+};
+
+LiteLED    strip( timing, ORDER_GRB, false );   // RMT driver
+// LiteLEDpio strip( timing, ORDER_GRB, false );   // or the PARLIO driver (on SoCs that have PARLIO)
+```
+
+Define the structure above the strip object, as shown, so it is initialised first. The constructor copies the values, so the structure does not need to stay in scope after the strip object has been constructed.
+
+The members must be listed in the order they are declared in [`ll_custom_timing_t`](#ll_custom_timing_t). Any members left off the end keep their defaults.
+
+The built-in LED types are unchanged by this feature.
+
+<a name="timing-parameters"></a>
+### Timing Parameters
+
+A `0` bit is sent as T0H high then T0L low. A `1` bit is sent as T1H high then T1L low. After the last bit the line is held low for `reset_us`.
+
+Neither driver can produce an arbitrary time. Each is rounded to a whole number of ticks of the driver's clock, so the time actually sent can differ from the time requested. How much depends on the driver:
+
+| | RMT | PARLIO |
+|---|---|---|
+| Tick | `1 / resolution_hz` (default 25 ns) | Chosen automatically (25 ns to 400 ns) |
+| Rounding | Each time is rounded to the nearest tick | Each time is rounded to the nearest tick of the chosen clock |
+| Accuracy control | `resolution_hz` | `parlio_tolerance_ns` |
+| Cost of a finer tick | None | More DMA memory |
+
+<a name="custom-timing-rmt"></a>
+### RMT Driver
+
+- The tick is `1 / resolution_hz`. The default is 40 MHz, a 25 ns tick. The built-in LED types use a 100 ns tick (10 MHz).
+- Each time is rounded to the nearest tick. At 40 MHz, 325 ns is sent as exactly 325 ns. At 10 MHz it would be rounded to 300 ns.
+- Each time must be at least one tick and at most 32767 ticks (the limit of the RMT duration field): 819 µs at 40 MHz. `reset_us` is sent in two equal halves, so the longest reset is twice that.
+- The resolution is per strip. Strips with different timing can be used together.
+- DMA, interrupt priority and PSRAM options work as they do for the built-in types.
+
+```cpp
+static const ll_custom_timing_t timing = {
+    .t0h_ns = 300, .t0l_ns = 900, .t1h_ns = 900, .t1l_ns = 300, .reset_us = 280,
+    .resolution_hz = 20000000       // 50 ns tick. 300 and 900 are exact multiples.
+};
+```
+
+<a name="custom-timing-parlio"></a>
+### PARLIO Driver
+
+PARLIO sends each LED bit as a run of samples at a fixed clock, so the tick is the PARLIO clock period. A finer tick means more samples per bit, and each sample costs one byte of DMA memory per LED bit.
+
+`resolution_hz` is ignored. The driver picks the clock for you: the **lowest** of 2.5, 4, 5, 8, 10, 16, 20 and 40 MHz at which every one of T0H, T0L, T1H and T1L, rounded to a whole number of samples, is within `parlio_tolerance_ns` (default 25 ns) of the value you asked for. The lowest clock is chosen to keep the DMA buffer small.
+
+| Clock | Tick | Samples in a 1250 ns bit | DMA bytes per LED colour byte |
+|---|---|---|---|
+| 2.5 MHz | 400 ns | 3 | 24 |
+| 5 MHz | 200 ns | 6 | 48 |
+| 10 MHz | 100 ns | 12 | 96 |
+| 20 MHz | 50 ns | 25 | 200 |
+| 40 MHz | 25 ns | 50 | 400 |
+
+For a 325/925 ns request:
+
+| `parlio_tolerance_ns` | Clock chosen | Time sent (T0H / T0L) |
+|---|---|---|
+| 25 (default) | 10 MHz | 300 / 900 ns |
+| 5 | 40 MHz | 325 / 925 ns |
+
+**Limitations**
+
+- **DMA memory.** The DMA buffer is in internal RAM and is `LEDs × bytes per LED × (DMA bytes per colour byte)` plus the reset. At 40 MHz an RGB LED needs 1200 bytes, so a 300 LED strip needs about 360 kB, which won't fit in most SoCs. Choose the loosest tolerance your LED accepts. If the buffer can't be allocated, `begin()` returns `ESP_ERR_NO_MEM`.
+- **Bit period.** Both bit values are sent with the same number of samples. If the `0` and `1` bits have different periods, the shorter one is padded with extra low time to match the longer.
+- **Reset time.** The reset is a whole number of samples at the chosen clock.
+- **Tolerance.** If no clock meets `parlio_tolerance_ns`, `begin()` returns `ESP_ERR_INVALID_ARG`. Increase the tolerance, or use the RMT driver.
+- **`LiteLEDpioGroup`.** Custom timing isn't supported. The group constructor only takes a built-in type.
+
+The clock and sample counts chosen can be seen in the `parlio_strip_debug_dump` output when the log level is set to Verbose.
+
+<a name="custom-timing-errors"></a>
+### Errors
+
+`begin()` returns `ESP_ERR_INVALID_ARG` when:
+
+- (RMT) any time rounds to zero ticks, or is more than 32767 ticks;
+- (PARLIO) no clock can meet the tolerance, or the reset rounds to zero samples;
+- `resolution_hz` is `0`, or `order` is not a valid `color_order_t`;
+- the strip was constructed with `LED_STRIP_CUSTOM` using the built-in-type constructor, which supplies no timing.
+
+Always check the return value of `begin()` when using custom timing.
+
+<a name="custom-timing-verified"></a>
+### Verified Results
+
+Timing was measured by connecting the data pin to an RMT RX channel (12.5 ns resolution) and capturing a frame. RMT was measured on an ESP32-PICO-D4, an ESP32-C6 and an ESP32-S3, and PARLIO on an ESP32-C6 (the only one of the three with a PARLIO peripheral). The results were the same on every chip tested; the table shows the RMT and PARLIO measurements:
+
+| Driver | Request (T0H / T0L / T1H / T1L, ns) | Setting | Measured (ns) |
+|---|---|---|---|
+| RMT | 325 / 925 / 925 / 325 | 40 MHz | 325 / 925 / 925 / 325 |
+| RMT | 325 / 925 / 925 / 325 | 10 MHz | 300 / 900 / 900 / 300 (rounded) |
+| RMT | 300 / 900 / 600 / 600 | 40 MHz | 300 / 900 / 600 / 600 |
+| PARLIO | 325 / 925 / 925 / 325 | tolerance 25 (10 MHz) | 300 / 900 / 900 / 300 |
+| PARLIO | 325 / 925 / 925 / 325 | tolerance 5 (40 MHz) | 325 / 925 / 925 / 325 |
+| PARLIO | 300 / 900 / 600 / 600 | tolerance 25 (10 MHz) | 300 / 900 / 600 / 600 |
+| PARLIO | 333 / 925 / 925 / 325 | tolerance 5 | `begin()` returns `ESP_ERR_INVALID_ARG` |
+
+The built-in LED types measure the same as before: RMT 300/900/900/300 ns for WS2812; PARLIO 400/800/800/400 ns for all types.
+
+The reset time was measured the same way, as the low gap between two back-to-back `show()` calls. The gap is never shorter than `reset_us`. With RMT it is a constant 29 to 33 µs longer, depending on the chip, which is the time between one `show()` finishing and the next starting. With PARLIO it is longer again, by about 1.5 µs per sample per bit for a one-pixel strip, because the next frame is re-encoded before it is sent. The extra dark time is harmless to the LEDs.
+
 <a name="psram-for-large-arrays"></a>
 ## PSRAM for Large Arrays
 
@@ -2424,6 +2586,7 @@ for (size_t i = 0; i < LED_COUNT; i++) {
 
 1. **Check colour order**: Try different `setOrder()` values
 2. **Check LED type**: Some "WS2812" clones use RGB instead of GRB
+   - If the LED type isn't supported by the library, or its timing is different, see [Custom LED Timing](#custom-led-timing)
 3. **Power supply issues**: Insufficient power can cause colour errors
 
 <a name="flickering-or-glitches"></a>
@@ -2857,6 +3020,13 @@ void loop() {
 
 <a name="version-history"></a>
 # Version History
+
+**v3.3.0 (in development)**
+- Added custom LED timing: `LED_STRIP_CUSTOM`, `ll_custom_timing_t`, and constructors `LiteLED( timing, order, rgbw )` and `LiteLEDpio( timing, order, rgbw )`.
+- RMT: user timing in ns, rounded to the nearest tick of a per-strip resolution (default 40 MHz, 25 ns).
+- PARLIO: the clock and samples per bit are chosen automatically to meet `parlio_tolerance_ns`. Not supported by `LiteLEDpioGroup`.
+- The timing of the built-in LED types is unchanged.
+- Added the `custom_timing` example sketch.
 
 **v3.2.0**
 - Remediated breaking changes introduced by esp-idf v6.

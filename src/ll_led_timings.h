@@ -157,7 +157,8 @@ static const char *led_type[] = {
     "ws2812_rgb",
     "sk6812",
     "apa106",
-    "sm16703"
+    "sm16703",
+    "custom"
 };
 
 // String names for color orders (for debugging)
@@ -170,6 +171,43 @@ static const char *col_ord[] = {
     "order_bgr",
     "order_max"
 };
+
+// Return the active timing/colour-order parameters for a strip
+static inline const led_params_t &ll_strip_params( const led_strip_t *strip ) {
+    return ( strip->type == LED_STRIP_CUSTOM ) ? strip->params : led_params[ strip->type ];
+}
+
+// Convert a time to RMT ticks, rounded to nearest
+static inline uint64_t ll_ns_to_ticks( uint64_t ns, uint32_t res_hz ) {
+    return ( ns * res_hz + 500000000ULL ) / 1000000000ULL;
+}
+
+#define LL_RMT_MAX_DURATION 32767   /* 15-bit duration field */
+
+// Build RMT symbols from a custom timing. Returns ESP_ERR_INVALID_ARG if any
+// time rounds to zero ticks or exceeds the 15-bit RMT duration field.
+static inline esp_err_t ll_build_custom_params( const ll_custom_timing_t &t, color_order_t order, led_params_t &out ) {
+    if ( t.resolution_hz == 0 || order >= ORDER_MAX ) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    uint64_t t0h = ll_ns_to_ticks( t.t0h_ns, t.resolution_hz );
+    uint64_t t0l = ll_ns_to_ticks( t.t0l_ns, t.resolution_hz );
+    uint64_t t1h = ll_ns_to_ticks( t.t1h_ns, t.resolution_hz );
+    uint64_t t1l = ll_ns_to_ticks( t.t1l_ns, t.resolution_hz );
+    // reset is sent as one symbol of two equal low halves
+    uint64_t rst = ll_ns_to_ticks( ( uint64_t )t.reset_us * 1000ULL, t.resolution_hz ) / 2;
+    uint64_t v[] = { t0h, t0l, t1h, t1l, rst };
+    for ( uint64_t x : v ) {
+        if ( x < 1 || x > LL_RMT_MAX_DURATION ) {
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    out.led_0     = { ( uint16_t )t0h, 1, ( uint16_t )t0l, 0 };
+    out.led_1     = { ( uint16_t )t1h, 1, ( uint16_t )t1l, 0 };
+    out.led_reset = { ( uint16_t )rst, 0, ( uint16_t )rst, 0 };
+    out.order     = order;
+    return ESP_OK;
+}
 
 // Color order management
 static color_order_t custom_color_order = ORDER_GRB;
@@ -201,29 +239,62 @@ static bool use_custom_color_order = false;
 
 #define PARLIO_LED_STRIP_CLK_HZ  2500000UL  // 2.5 MHz → 400 ns per PARLIO clock
 #define PARLIO_SAMPLES_PER_BIT   3          // PARLIO clock cycles per LED data bit
-#define PARLIO_BIT0_PATTERN      0x04       // 0b100 : clocks high, low,  low
-#define PARLIO_BIT1_PATTERN      0x06       // 0b110 : clocks high, high, low
 // data_width=8: each DMA byte = 1 PARLIO clock = 400 ns.
 // Each LED data bit expands to (PARLIO_SAMPLES_PER_BIT * 8) = 24 DMA bytes.
 // Reset: 1000 zero-bytes × 400 ns = 400 µs LOW, satisfies all supported LED types.
 #define PARLIO_BYTES_PER_BIT     ( PARLIO_SAMPLES_PER_BIT * 8 )   // 24 DMA bytes per LED bit
 #define PARLIO_RESET_BYTES       1000
 
-typedef struct {
-    uint32_t      clk_hz;           /* PARLIO output clock frequency (Hz) */
-    uint8_t       samples_per_bit;  /* PARLIO clock cycles per LED protocol data bit */
-    uint8_t       bit0_pattern;     /* Bit pattern for LED data 0 (MSB = first sample out) */
-    uint8_t       bit1_pattern;     /* Bit pattern for LED data 1 (MSB = first sample out) */
-    color_order_t order;            /* LED colour order (shared with RMT led_params) */
-} parlio_led_params_t;
-
 static const parlio_led_params_t parlio_led_params[] = {
-    [ LED_STRIP_WS2812     ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_GRB },
-    [ LED_STRIP_WS2812_RGB ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_RGB },
-    [ LED_STRIP_SK6812     ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_GRB },
-    [ LED_STRIP_APA106     ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_RGB },
-    [ LED_STRIP_SM16703    ] = { PARLIO_LED_STRIP_CLK_HZ, PARLIO_SAMPLES_PER_BIT, PARLIO_BIT0_PATTERN, PARLIO_BIT1_PATTERN, ORDER_RGB },
+    [ LED_STRIP_WS2812     ] = { PARLIO_LED_STRIP_CLK_HZ, 1, 2, 2, 1, PARLIO_SAMPLES_PER_BIT, PARLIO_RESET_BYTES, ORDER_GRB },
+    [ LED_STRIP_WS2812_RGB ] = { PARLIO_LED_STRIP_CLK_HZ, 1, 2, 2, 1, PARLIO_SAMPLES_PER_BIT, PARLIO_RESET_BYTES, ORDER_RGB },
+    [ LED_STRIP_SK6812     ] = { PARLIO_LED_STRIP_CLK_HZ, 1, 2, 2, 1, PARLIO_SAMPLES_PER_BIT, PARLIO_RESET_BYTES, ORDER_GRB },
+    [ LED_STRIP_APA106     ] = { PARLIO_LED_STRIP_CLK_HZ, 1, 2, 2, 1, PARLIO_SAMPLES_PER_BIT, PARLIO_RESET_BYTES, ORDER_RGB },
+    [ LED_STRIP_SM16703    ] = { PARLIO_LED_STRIP_CLK_HZ, 1, 2, 2, 1, PARLIO_SAMPLES_PER_BIT, PARLIO_RESET_BYTES, ORDER_RGB },
 };
+
+// Return the active PARLIO parameters for a strip
+static inline const parlio_led_params_t &ll_pio_params( const led_strip_t *strip ) {
+    return ( strip->type == LED_STRIP_CUSTOM ) ? strip->pio : parlio_led_params[ strip->type ];
+}
+
+// Candidate PARLIO clocks, lowest (smallest DMA buffer) first. All divide the PARLIO source clocks.
+static const uint32_t ll_pio_candidate_clk_hz[] = { 2500000, 4000000, 5000000, 8000000, 10000000, 16000000, 20000000, 40000000 };
+#define LL_PIO_MAX_SAMPLES_PER_BIT 64
+
+// Choose the lowest PARLIO clock at which every phase rounds to within tol_ns of the request.
+// Returns ESP_ERR_INVALID_ARG if none does. A shorter bit period is padded low to match the longer.
+static inline esp_err_t ll_build_parlio_params( const ll_custom_timing_t &t, color_order_t order, parlio_led_params_t &out ) {
+    if ( order >= ORDER_MAX ) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    const uint32_t req[ 4 ] = { t.t0h_ns, t.t0l_ns, t.t1h_ns, t.t1l_ns };
+    for ( uint32_t f : ll_pio_candidate_clk_hz ) {
+        uint32_t n[ 4 ];
+        bool ok = true;
+        for ( int i = 0; i < 4 && ok; i++ ) {
+            n[ i ] = ( uint32_t )ll_ns_to_ticks( req[ i ], f );
+            int64_t actual_ns = ( int64_t )n[ i ] * 1000000000LL / f;
+            int64_t err = actual_ns - ( int64_t )req[ i ];
+            ok = n[ i ] >= 1 && ( err < 0 ? -err : err ) <= ( int64_t )t.parlio_tolerance_ns;
+        }
+        uint32_t spb = ok ? ( ( n[ 0 ] + n[ 1 ] ) > ( n[ 2 ] + n[ 3 ] ) ? n[ 0 ] + n[ 1 ] : n[ 2 ] + n[ 3 ] ) : 0;
+        if ( !ok || spb > LL_PIO_MAX_SAMPLES_PER_BIT ) {
+            continue;
+        }
+        uint64_t rst = ll_ns_to_ticks( ( uint64_t )t.reset_us * 1000ULL, f );
+        if ( rst < 1 ) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        out.clk_hz = f;
+        out.n0h = n[ 0 ]; out.n0l = n[ 1 ]; out.n1h = n[ 2 ]; out.n1l = n[ 3 ];
+        out.samples_per_bit = spb;
+        out.reset_samples = ( uint32_t )rst;
+        out.order = order;
+        return ESP_OK;
+    }
+    return ESP_ERR_INVALID_ARG;
+}
 
 #endif /* SOC_PARLIO_SUPPORTED */
 

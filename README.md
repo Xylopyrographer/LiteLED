@@ -40,6 +40,12 @@ Both drivers can be used concurrently as supported by the SoC hardware.
 
 - Though the RGB colour order for the supported LED types is supposed to be standard, some are not. The library lets you set any R, G, and B colour order for any LED type to manage those cases. No need to modify colour definitions in the sketch.
 
+**Custom LED Timing**
+
+- For an LED type that isn't one of the built-in types, supply your own T0H, T0L, T1H, T1L and reset timing.
+- Works with both the RMT driver (25 ns tick by default) and the PARLIO driver (clock chosen automatically to meet a tolerance you set).
+- See *Custom LED Timing* in *Using LiteLED.md*, and the `custom_timing` example.
+
 **DMA Support**
 
 - When using the RMT driver and as supported by the ESP32 model, can optionally use RMT DMA for driving the LED strip.
@@ -151,6 +157,13 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.3.0 (in development)
+
+- Feat: Custom LED timing: `LED_STRIP_CUSTOM`, `ll_custom_timing_t` and a `LiteLED( timing, order, rgbw )` constructor for the RMT driver.
+- Feat: Custom LED timing for the PARLIO driver: `LiteLEDpio( timing, order, rgbw )`. The PARLIO clock and samples per bit are chosen automatically to meet `parlio_tolerance_ns`. Not supported by `LiteLEDpioGroup`.
+- Change: The PARLIO encoder now works from per-phase sample counts rather than a fixed 3-sample pattern. The timing of the built-in LED types is unchanged.
+- Add `custom_timing` example.
 
 ### v3.2.0
 

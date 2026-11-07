@@ -39,6 +39,7 @@ extern "C" {
 // -------------------------------------------------------------------------
 LiteLEDpio::LiteLEDpio( led_strip_type_t led_type, bool rgbw ) {
     theStrip.type       = led_type;
+    theStrip.timing_err = ( led_type == LED_STRIP_CUSTOM ) ? ESP_ERR_INVALID_ARG : ESP_OK;   /* CUSTOM needs the timing constructor */
     theStrip.is_rgbw    = rgbw;
     theStrip.brightness = 255;
     theStrip.bright_act = 255;
@@ -48,6 +49,13 @@ LiteLEDpio::LiteLEDpio( led_strip_type_t led_type, bool rgbw ) {
     parlioCfg.parlio_buf       = NULL;
     parlioCfg.parlio_buf_bytes = 0;
     valid_instance = false;
+}
+
+// constructor, custom timing
+LiteLEDpio::LiteLEDpio( const ll_custom_timing_t &timing, color_order_t order, bool rgbw )
+    : LiteLEDpio( LED_STRIP_CUSTOM, rgbw ) {
+    theStrip.params.order = order;      /* colour order is read via ll_strip_params() */
+    theStrip.timing_err = ll_build_parlio_params( timing, order, theStrip.pio );
 }
 
 LiteLEDpio::~LiteLEDpio() {
