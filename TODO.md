@@ -1,39 +1,43 @@
 # TODO
 
-## Fix SK6812 timing definition (RMT)
+# v3.3.1 plan
 
-**Status: code fix done in `d0e542e` (dev). Hardware test on real SK6812 strips (steps 2 to 4 below) still open.**
+## Audit built-in timings against OEM datasheets
+
+Source the OEM datasheet for every built-in type (WS2812, WS2812_RGB, SK6812, APA106, SM16703; WS281XV7 was checked against 13 sheets, see `Discussions/YInWorldSemi/WS281X_Datasheets/TIMING_SUMMARY.md`) and check each one's RMT and PARLIO timing against the source material: T0H, T0L, T1H, T1L, code period and reset, after the 10 MHz tick truncation (RMT) and the shared 2.5 MHz / 3 sample pattern (PARLIO). Record the sheet (maker, revision) and the result per type. Keep sheets in `Discussions/OtherDataSheets/`.
+
+## SK6812 timing (RMT)
+
+**Status: `d0e542e` (in v3.3.0) switched `led_sk6812` to its own 1-bit and reset values. Checked against the Shenzhen Normand SK6812 datasheet Rev. 06, page 6 (`Discussions/OtherDataSheets/SK6812 LED  Datasheet.pdf`); the changes below are not yet made. No test on real SK6812 strips yet.**
 
 **File:** `src/ll_led_timings.h`
 
-**Problem:** `led_sk6812` is built from a mix of SK6812 and SM16703 symbols. The SK6812-specific `sk6812_one` and `sk6812_reset` are defined but never used.
+Datasheet (section 12): code period min 1.20 µs; T0H 0.2 / **0.32** / 0.4; T0L min 0.8; T1H 0.58 / **0.64** / 1.0; T1L min 0.2; reset **>80 µs**. (The heading says "1.25 µs ± 600 ns", which contradicts the table's 1.20 µs minimum.) The LiteLED values are the datasheet's "standard" column; the reset of 90 µs is above the minimum.
 
-```cpp
-static const led_params_t led_sk6812 = {
-    .led_0 = sk6812_zero,
-    .led_1 = sm16703_one,       // should be sk6812_one
-    .led_reset = sm16703_reset, // should be sk6812_reset
-    .order = ORDER_GRB
-};
-```
+Findings, at the 10 MHz RMT tick (1 tick = 100 ns):
 
-**Effect today:**
+| | Sent now | Datasheet | Problem |
+|---|---|---|---|
+| "0" bit | 300 / 900 ns, period 1200 | T0H 200-400, T0L >= 800, T >= 1200 | none |
+| "1" bit | 600 / 400 ns, **period 1000** | T1H 580-1000, T1L >= 200, **T >= 1200** | period below minimum; T1H margin 20 ns |
+| Reset | 90 µs | > 80 µs | margin 10 µs |
 
-| | As coded for SK6812 | Actually sent |
-|---|---|---|
-| "1" bit | T1H 0.64 µs / T1L 0.40 µs | T1H 0.90 µs / T1L 0.30 µs (SM16703) |
-| Reset | 90 µs | 210 µs (SM16703) |
+Before `d0e542e` the "1" bit was the SM16703 900 / 300 (period 1200), which met every row; the fix made the high time match the "standard" value but shortened the period.
 
-**Fix:**
+**Proposed fix:**
 
-1. In `led_sk6812`, change `.led_1` to `sk6812_one` and `.led_reset` to `sk6812_reset`.
-2. Check the tick truncation at the 10 MHz RMT resolution (1 tick = 100 ns). `sk6812_zero` T0H of 0.32 µs truncates to 3 ticks (300 ns). `sk6812_one` is 6 ticks high and 4 ticks low (600/400 ns), so the "1" bit period is 1000 ns against 1200 ns for the "0" bit. Confirm these are within the SK6812 datasheet limits, or set the values to whole-tick figures.
-3. Test on real SK6812 (RGB and RGBW) hardware with RMT. Ideally take scope captures of T0H/T0L/T1H/T1L and the reset gap. Check that long strips latch correctly and show no colour glitches. The 90 µs reset is shorter than the 210 µs now in use, so watch for strips that fail to latch.
-4. Update the timing table in the docs if one is published.
+1. "1" bit 700 / 500 ns (T1H 700 inside 580-1000, T1L 500 >= 200, period 1200). The "0" bit stays 300 / 900.
+2. Reset 280 µs (esp-idf's `led_strip` uses 280 µs; 100 µs would also pass).
+3. Test on real SK6812 (RGB and RGBW) with RMT, ideally with scope captures. Check long strips latch and show no colour glitches.
+4. Update the timing table in the docs if one is published and add a version history line (the fix in `d0e542e` was not mentioned in the v3.3.0 notes).
 
-**Not affected:** PARLIO uses one shared timing set for all types (2.5 MHz, 3 samples per bit), so this bug only applies to the RMT driver. Whether the shared PARLIO timing suits SK6812 is a separate question.
+**PARLIO:** the shared timing (2.5 MHz, 1/2/2/1 samples) sends T0H 400 ns and T0L 800 ns, exactly on the SK6812 limits (T0H max 0.4 µs, T0L min 0.8 µs). C6 measured about 391 / 809 ns. Part of the audit above.
+
+**For reference:** the esp-idf `led_strip` component's SK6812 values are T0H 300, T0L 900, T1H 700, T1L 600 ns, reset 280 µs (not the source of LiteLED's values).
 
 **Related:** the WorldSemi 325 ns T0H discussion, https://github.com/Xylopyrographer/LiteLED/discussions/33
+
+# Open items (v3.3.0 shipped 2026-11-16)
 
 ## Remaining checks for LED_STRIP_WS281XV7 and custom timing (v3.3.0 shipped 2026-11-16)
 
