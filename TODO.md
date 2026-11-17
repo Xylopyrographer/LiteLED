@@ -2,40 +2,42 @@
 
 # v3.3.1 plan
 
-## Audit built-in timings against OEM datasheets
+**Rule (decided 2026-11-17):** never change the timing an existing LED type sends. If a datasheet shows a significant deviation, add a new type with the datasheet timing and `V2` appended to the name (like `LED_STRIP_WS281XV7`), and document which type suits which part.
 
-Source the OEM datasheet for every built-in type (WS2812, WS2812_RGB, SK6812, APA106, SM16703; WS281XV7 was checked against 13 sheets, see `Discussions/YInWorldSemi/WS281X_Datasheets/TIMING_SUMMARY.md`) and check each one's RMT and PARLIO timing against the source material: T0H, T0L, T1H, T1L, code period and reset, after the 10 MHz tick truncation (RMT) and the shared 2.5 MHz / 3 sample pattern (PARLIO). Record the sheet (maker, revision) and the result per type. Keep sheets in `Discussions/OtherDataSheets/`.
+## SK6812: restore the v3.2.0 timing, with its own constants
 
-## SK6812 timing (RMT)
+Audit result, 2026-11-17 (Shenzhen Normand SK6812 datasheet Rev. 06, page 6, `Discussions/OtherDataSheets/SK6812 LED  Datasheet.pdf`): code period min 1.20 us; T0H 0.2 / 0.32 / 0.4; T0L min 0.8; T1H 0.58 / 0.64 / 1.0; T1L min 0.2; reset > 80 us.
 
-**Status: `d0e542e` (in v3.3.0) switched `led_sk6812` to its own 1-bit and reset values. Checked against the Shenzhen Normand SK6812 datasheet Rev. 06, page 6 (`Discussions/OtherDataSheets/SK6812 LED  Datasheet.pdf`); the changes below are not yet made. No test on real SK6812 strips yet.**
+v3.2.0 sent T0H 300, T0L 900, T1H 900, T1L 300 ns and a 210 us reset (the 1-bit and reset were borrowed from SM16703 and the SK6812 constants were unused). That is within every limit. `d0e542e` (in v3.3.0) changed it to a 1-bit of 600/400 ns (period 1000 ns, below the 1200 ns minimum; T1H margin 20 ns) and a 90 us reset (margin 10 us). That broke backwards compatibility and is worse against the datasheet.
 
-**File:** `src/ll_led_timings.h`
+Fix (`src/ll_led_timings.h`):
 
-Datasheet (section 12): code period min 1.20 µs; T0H 0.2 / **0.32** / 0.4; T0L min 0.8; T1H 0.58 / **0.64** / 1.0; T1L min 0.2; reset **>80 µs**. (The heading says "1.25 µs ± 600 ns", which contradicts the table's 1.20 µs minimum.) The LiteLED values are the datasheet's "standard" column; the reset of 90 µs is above the minimum.
+1. Give `led_sk6812` its own constants that send exactly what v3.2.0 sent (300/900, 900/300, 210 us), compliant with the datasheet and not borrowed from any other LED type. Remove or correct the unused `sk6812_one` / `sk6812_reset`.
+2. Verify with the RX loopback rig: RMT output must be identical to v3.2.0 (build v3.2.0 and compare).
+3. Release notes (3.3.1): say v3.3.0 changed SK6812 timing and 3.3.1 restores the v3.2.0 timing.
+4. Test on real SK6812 (RGB and RGBW) strips if available.
 
-Findings, at the 10 MHz RMT tick (1 tick = 100 ns):
+Note for the docs: `LED_STRIP_WS281XV7` timing (325/925/625/625, 400 us) also lies inside the SK6812 windows.
 
-| | Sent now | Datasheet | Problem |
-|---|---|---|---|
-| "0" bit | 300 / 900 ns, period 1200 | T0H 200-400, T0L >= 800, T >= 1200 | none |
-| "1" bit | 600 / 400 ns, **period 1000** | T1H 580-1000, T1L >= 200, **T >= 1200** | period below minimum; T1H margin 20 ns |
-| Reset | 90 µs | > 80 µs | margin 10 µs |
+## New type LED_STRIP_APA106V2
 
-Before `d0e542e` the "1" bit was the SM16703 900 / 300 (period 1200), which met every row; the fix made the high time match the "standard" value but shortened the period.
+APA106 datasheet (2014, `Discussions/OtherDataSheets/APA-106 F8 F5 LED 2014.pdf`): 0.35 / 1.36 / 1.36 / 0.35 us, each +/-150 ns, reset 50 us. The RMT output of `LED_STRIP_APA106` (300/1300/1300/300 ns) is within tolerance. The PARLIO output (shared 2.5 MHz timing, 400/800/800/400 ns) is not: T0L and T1H are about 400 ns below the 1210 ns minimum (noted in a code comment since v3.1.0).
 
-**Proposed fix:**
+Add `LED_STRIP_APA106V2` with 350/1360/1360/350 ns, reset 50 us, ORDER_RGB, built from a preset like `LED_STRIP_WS281XV7`. Leave `LED_STRIP_APA106` unchanged. Check PARLIO picks a clock that meets the windows, add to the docs (`Using LiteLED.md`, README, Architecture, `keywords.txt`), add an example or extend one, and loopback-verify RMT and PARLIO.
 
-1. "1" bit 700 / 500 ns (T1H 700 inside 580-1000, T1L 500 >= 200, period 1200). The "0" bit stays 300 / 900.
-2. Reset 280 µs (esp-idf's `led_strip` uses 280 µs; 100 µs would also pass).
-3. Test on real SK6812 (RGB and RGBW) with RMT, ideally with scope captures. Check long strips latch and show no colour glitches.
-4. Update the timing table in the docs if one is published and add a version history line (the fix in `d0e542e` was not mentioned in the v3.3.0 notes).
+## SM16703 and WS2812
 
-**PARLIO:** the shared timing (2.5 MHz, 1/2/2/1 samples) sends T0H 400 ns and T0L 800 ns, exactly on the SK6812 limits (T0H max 0.4 µs, T0L min 0.8 µs). C6 measured about 391 / 809 ns. Part of the audit above.
+SM16703 (SM16703AP datasheet, 2024-02-28) is within every limit on RMT and PARLIO (RMT reset 210 us against a 200 us minimum; PARLIO T0H 400 ns sits on the 400 ns maximum). No change.
 
-**For reference:** the esp-idf `led_strip` component's SK6812 values are T0H 300, T0L 900, T1H 700, T1L 600 ns, reset 280 µs (not the source of LiteLED's values).
+WS2812 and WS2812_RGB stay as they are (decided 2026-11-17). Per `Discussions/YInWorldSemi/WS281X_Datasheets/TIMING_SUMMARY.md`, newer WS2812B parts (V6, V7) want a reset above 280 us while the RMT reset is 50 us; document that those parts should use `LED_STRIP_WS281XV7`.
 
-**Related:** the WorldSemi 325 ns T0H discussion, https://github.com/Xylopyrographer/LiteLED/discussions/33
+## Document which type suits which part
+
+In `Using LiteLED.md` / README: a table of LED parts and the LED type to use (WS2812, WS2812_RGB, SK6812 / WS281XV7, APA106 / APA106V2, SM16703, WS281XV7 for the WS281x family, custom timing otherwise).
+
+## Remaining audit
+
+Built-in types are checked against OEM datasheets: SM16703, SK6812 and APA106 done 2026-11-17. WS2812 kept as is. Keep new sheets in `Discussions/OtherDataSheets/`.
 
 ## Peripheral Manager deinit callbacks leak the hardware (PARLIO, probably RMT)
 
