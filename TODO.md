@@ -37,6 +37,17 @@ Before `d0e542e` the "1" bit was the SM16703 900 / 300 (period 1200), which met 
 
 **Related:** the WorldSemi 325 ns T0H discussion, https://github.com/Xylopyrographer/LiteLED/discussions/33
 
+## Peripheral Manager deinit callbacks leak the hardware (PARLIO, probably RMT)
+
+Found 2026-11-17 by running the PARLIO Peripheral Manager check on an XIAO ESP32-C6 against arduino-esp32 3.3.11 with the `ESP32_BUS_TYPE_PARLIO_TX` patch applied (the dedicated path had never run before). Same result on 3.3.2. Test sketch: `custom_timing_test/src_periman/main_periman_pio.cpp`.
+
+1. **Leak.** `ll_parlio_deinit_cb()` (`ll_parlio_core.cpp`) only sets the instance's valid flag to false and drops the registry entry. It never disables or deletes the PARLIO TX unit. `LiteLEDpio::begin()` only calls `free()` when `valid_instance` is true, so a `begin()` after a forced reassignment (for example `pinMode()` on the strip's pin) allocates a second unit while the first is still held. The C6 has one TX unit, so it fails with `no free tx unit`, and so does everything after it. Fix: free the unit when the instance is invalidated, or have `begin()`/`free()`/the destructor free it whenever `parlioCfg.parlio_chan` is still set. Same check for `LiteLEDpioGroup`.
+2. **`free()` clears a pin it no longer owns.** After a forced reassignment, `free()` still calls `perimanSetPinBus( gpio, ESP32_BUS_TYPE_INIT, ... )`, which would release the new owner's registration. Only release the pin if `perimanGetPinBus()` still returns our handle.
+3. **RMT has the same shape.** `ll_periman_deinit_callback()` (`ll_registry.cpp`) calls `invalidate()` and leaves the channel allocated ("cleanup is handled by the peripheral taking over" is not true, because LiteLED replaced the RMT callback). Untested: the RMT periman check passes only because the chip has spare TX channels. Test by forcing reassignment more times than there are channels.
+4. **`LiteLEDpio::getActiveInstanceCount()` is a stub that returns 0** (a `TODO` in `LiteLEDpio.cpp`), so the periman check "active instances +1" fails on every core. Implement the counter or remove the check and document the stub.
+
+Rig: env `xiao-c6-periman` (PlatformIO, platform 55.03.32 = core 3.3.2) or the arduino-cli patched-core copy method in `custom_timing_test/SESSION_NOTES.md` (update 2026-11-17). Fix before LiteLED relies on the dedicated bus type.
+
 # Open items (v3.3.0 shipped 2026-11-16)
 
 ## Remaining checks for LED_STRIP_WS281XV7 and custom timing (v3.3.0 shipped 2026-11-16)
@@ -50,7 +61,7 @@ Loopback-verified on ESP32-PICO-D4, S3, C6 and P4 (RMT, and PARLIO on C6 and P4)
 
 ## PARLIO Peripheral Manager bus type
 
-arduino-esp32 has no `ESP32_BUS_TYPE_PARLIO_TX` (checked through 3.3.12 and `master`), so PARLIO pins are registered as `ESP32_BUS_TYPE_GPIO` with no deinit callback. Requested upstream: https://github.com/espressif/arduino-esp32/issues/13130
+arduino-esp32 has no `ESP32_BUS_TYPE_PARLIO_TX` (checked through 3.3.12 and `master`), so PARLIO pins are registered as `ESP32_BUS_TYPE_GPIO` with no deinit callback. Requested upstream: https://github.com/espressif/arduino-esp32/issues/13130. PR adding the type: https://github.com/espressif/arduino-esp32/pull/13131 (opened 2026-11-17; the maintainers said it will not be in 3.3.13 or 4.0.0). The PR also defines the name as a macro, so the existing `#ifdef` would work unchanged if it is merged as is; if that hunk is dropped, use the version check below.
 
 When a core ships the type: the `#ifdef ESP32_BUS_TYPE_PARLIO_TX` tests in `ll_parlio_core.h`, `LiteLEDpio.cpp`, `LiteLEDpioGroup.cpp` and `ll_parlio_core.cpp` can never be true (bus types are enum constants), so replace them with an `ESP_ARDUINO_VERSION_VAL()` check against the first release that has it, then test the dedicated path on a PARLIO chip.
 
