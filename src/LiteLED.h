@@ -89,6 +89,7 @@ enum led_strip_type_t {
     LED_STRIP_APA106,
     LED_STRIP_SM16703,
     LED_STRIP_WS281XV7,     /* WorldSemi WS281x family, timing per the WS2812B V7 datasheet. GRB order; RGB parts use setOrder(). */
+    LED_STRIP_APA106R2,     /* APA106 with the datasheet timing (350/1360/1360/350 ns). RGB order. LED_STRIP_APA106 is unchanged. R = LiteLED revision (V is an OEM datasheet version). */
     LED_STRIP_CUSTOM,       /* user-supplied timing; see ll_custom_timing_t. */
     LED_STRIP_TYPE_MAX
 };

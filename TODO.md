@@ -2,7 +2,7 @@
 
 # v3.3.1 plan
 
-**Rule (decided 2026-11-17):** never change the timing an existing LED type sends. If a datasheet shows a significant deviation, add a new type with the datasheet timing and `V2` appended to the name (like `LED_STRIP_WS281XV7`), and document which type suits which part.
+**Rule (decided 2026-11-17):** never change the timing an existing LED type sends. If a datasheet shows a significant deviation, add a new type with the datasheet timing and `R2` appended to the name (e.g. `LED_STRIP_APA106R2`), and document which type suits which part. `R` = LiteLED's own revision; `V` in a name (`LED_STRIP_WS281XV7`) always means an OEM datasheet version (decided 2026-11-17: `R2`, not `V2`, to avoid mixing the two).
 
 ## SK6812: restore the v3.2.0 timing, with its own constants
 
@@ -19,11 +19,11 @@ Fix (`src/ll_led_timings.h`):
 
 Note for the docs: `LED_STRIP_WS281XV7` timing (325/925/625/625, 400 us) also lies inside the SK6812 windows.
 
-## New type LED_STRIP_APA106V2
+## New type LED_STRIP_APA106R2
 
 APA106 datasheet (2014, `Discussions/OtherDataSheets/APA-106 F8 F5 LED 2014.pdf`): 0.35 / 1.36 / 1.36 / 0.35 us, each +/-150 ns, reset 50 us. The RMT output of `LED_STRIP_APA106` (300/1300/1300/300 ns) is within tolerance. The PARLIO output (shared 2.5 MHz timing, 400/800/800/400 ns) is not: T0L and T1H are about 400 ns below the 1210 ns minimum (noted in a code comment since v3.1.0).
 
-Add `LED_STRIP_APA106V2` with 350/1360/1360/350 ns, reset 50 us, ORDER_RGB, built from a preset like `LED_STRIP_WS281XV7`. Leave `LED_STRIP_APA106` unchanged. Check PARLIO picks a clock that meets the windows, add to the docs (`Using LiteLED.md`, README, Architecture, `keywords.txt`), add an example or extend one, and loopback-verify RMT and PARLIO.
+Add `LED_STRIP_APA106R2` with 350/1360/1360/350 ns, reset 50 us, ORDER_RGB, built from a preset like `LED_STRIP_WS281XV7`. Leave `LED_STRIP_APA106` unchanged. Check PARLIO picks a clock that meets the windows, add to the docs (`Using LiteLED.md`, README, Architecture, `keywords.txt`), add an example or extend one, and loopback-verify RMT and PARLIO.
 
 ## SM16703 and WS2812
 
@@ -33,7 +33,7 @@ WS2812 and WS2812_RGB stay as they are (decided 2026-11-17). Per `Discussions/YI
 
 ## Document which type suits which part
 
-In `Using LiteLED.md` / README: a table of LED parts and the LED type to use (WS2812, WS2812_RGB, SK6812 / WS281XV7, APA106 / APA106V2, SM16703, WS281XV7 for the WS281x family, custom timing otherwise).
+In `Using LiteLED.md` / README: a table of LED parts and the LED type to use (WS2812, WS2812_RGB, SK6812 / WS281XV7, APA106 / APA106R2, SM16703, WS281XV7 for the WS281x family, custom timing otherwise).
 
 ## Remaining audit
 

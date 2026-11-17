@@ -46,6 +46,10 @@ Both drivers can be used concurrently as supported by the SoC hardware.
 - Works with the RMT and PARLIO drivers, including `LiteLEDpioGroup`.
 - See the `ws281xv7` example.
 
+**LED types and timing**
+
+- The timing of an existing LED type does not change between releases. When a data sheet shows a type's timing is a poor fit, a new type is added with `R2` appended (for example `LED_STRIP_APA106R2`, the APA106 data sheet timing for both drivers) and the original is left alone. `R` stands for LiteLED's own revision of a type; `V` in a name such as `LED_STRIP_WS281XV7` always means an OEM data sheet version. See *Choosing an LED type* in *Using LiteLED.md*.
+
 **Custom LED Timing**
 
 - For an LED type that isn't one of the built-in types, supply your own T0H, T0L, T1H, T1L and reset timing.
@@ -163,6 +167,12 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.3.1 (in development)
+
+- Fix: `LED_STRIP_SK6812` sends its v3.2.0 timing again. v3.3.0 changed its 1-bit and reset timing (1-bit period 1.0 µs, below the data sheet's 1.2 µs minimum; reset 90 µs). The type now has its own constants.
+- Feat: Add `LED_STRIP_APA106R2`, the APA106 data sheet timing for the RMT and PARLIO drivers. `LED_STRIP_APA106` is unchanged.
+- Policy: existing LED types keep their timing; a data sheet correction is a new `R2` type.
 
 ### v3.3.0
 

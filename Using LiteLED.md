@@ -554,6 +554,7 @@ Supported LED strip types.
     LED_STRIP_APA106         // APA106 (RGB colour order)
     LED_STRIP_SM16703        // SM16703 (RGB colour order)
     LED_STRIP_WS281XV7       // WorldSemi WS281x family, WS2812B V7 timing (GRB colour order)
+    LED_STRIP_APA106R2       // APA106 with the data sheet timing (RGB colour order)
     LED_STRIP_CUSTOM         // User supplied timing (see Custom LED Timing)
 
 ```
@@ -561,6 +562,8 @@ Supported LED strip types.
 **Description**:
 
 Defines the LED strip type, which determines timing parameters and default colour order.
+
+The timing of an existing LED type never changes between releases. When a data sheet shows that an existing type's timing is a poor fit for a part, a new type is added with the data sheet timing and `R2` appended to the name (for example `LED_STRIP_APA106R2`), and the original type is left alone. `R` stands for LiteLED's own revision of a type; `V` in a name such as `LED_STRIP_WS281XV7` always means an OEM data sheet version. See [Choosing an LED type](#choosing-an-led-type).
 
 `LED_STRIP_CUSTOM` is not passed to the usual constructor. It is selected by the constructor that takes an [`ll_custom_timing_t`](#ll_custom_timing_t). See [Custom LED Timing](#custom-led-timing).
 
@@ -592,6 +595,20 @@ Specifies the byte order for transmitting colour data to LEDs. Most WS2812 strip
 - APA106:       `ORDER_RGB`
 - SM16703:      `ORDER_RGB`
 - WS281XV7:     `ORDER_GRB` (the WS2811 variants send RGB; use `setOrder( ORDER_RGB )` for those)
+- APA106R2:     `ORDER_RGB`
+
+<a name="choosing-an-led-type"></a>
+**Choosing an LED type**:
+
+| LED part | Type | Note |
+|---|---|---|
+| WS2812, WS2812B (older parts) | `LED_STRIP_WS2812` | GRB. Reset is 50 µs (RMT) |
+| WS2812B V6 / V7, WS2811, WS2813, WS2815 (WS2814 is not supported: it sends white first) | `LED_STRIP_WS281XV7` | WorldSemi timing; reset 400 µs. RGB parts: `setOrder( ORDER_RGB )` |
+| WS2812 with RGB colour order | `LED_STRIP_WS2812_RGB` | |
+| SK6812, SK6812 RGBW | `LED_STRIP_SK6812` | Timing within the data sheet. `LED_STRIP_WS281XV7` is also within the SK6812 limits |
+| SM16703 | `LED_STRIP_SM16703` | Within the data sheet limits (RMT and PARLIO) |
+| APA106 | `LED_STRIP_APA106R2` | Data sheet timing for both drivers. `LED_STRIP_APA106` is unchanged: its RMT timing is within tolerance but its PARLIO timing is not |
+| Anything else | `LED_STRIP_CUSTOM` | See [Custom LED Timing](#custom-led-timing) |
 
 ---
 
@@ -3008,6 +3025,11 @@ void loop() {
 
 <a name="version-history"></a>
 # Version History
+
+**v3.3.1 (in development)**
+- Fixed: `LED_STRIP_SK6812` sends its v3.2.0 timing again (T0H 300, T0L 900, T1H 900, T1L 300 ns, reset 210 µs). v3.3.0 changed it to a 1-bit of 600/400 ns and a 90 µs reset, which is shorter than the data sheet's 1.2 µs minimum bit period. The type now has its own timing constants and no longer borrows from SM16703.
+- Added the `LED_STRIP_APA106R2` LED type: the APA106 data sheet timing (350/1360/1360/350 ns, reset 50 µs) for the RMT and PARLIO drivers. `LED_STRIP_APA106` is unchanged.
+- Policy: the timing of an existing LED type does not change. A data sheet correction is a new type with `R2` appended.
 
 **v3.3.0**
 - Added the `LED_STRIP_WS281XV7` LED type for the WorldSemi WS281x family, using the timing from the WS2812B V7 data sheet. Works with `LiteLED`, `LiteLEDpio` and `LiteLEDpioGroup`.

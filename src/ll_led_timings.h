@@ -85,24 +85,28 @@ static const rmt_symbol_word_t sm16703_reset = {                                
 };
 
 // SK6812 timing (RGBW LEDs)
+// Datasheet (Shenzhen Normand SK6812 Rev. 06): T0H 0.2-0.4 us, T0L >= 0.8 us, T1H 0.58-1.0 us,
+// T1L >= 0.2 us, code period >= 1.2 us, reset > 80 us.
+// These are the values LiteLED has always sent for this type (v3.2.0), kept unchanged so existing
+// strips see no difference. All lie inside the datasheet limits.
 static const rmt_symbol_word_t sk6812_zero = {
-    static_cast<uint16_t>( 0.32 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),   // .duration0 = T0H=0.32us
-    1,                                                                       // .level0
-    static_cast<uint16_t>( 0.9 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),    // .duration1 = T0L=0.9us
-    0                                                                        // .level1
+    static_cast<uint16_t>( 0.3 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),   // .duration0 = T0H=0.3us
+    1,                                                                      // .level0
+    static_cast<uint16_t>( 0.9 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),   // .duration1 = T0L=0.9us
+    0                                                                       // .level1
 };
 
 static const rmt_symbol_word_t sk6812_one = {
-    static_cast<uint16_t>( 0.64 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),   // .duration0 = T1H=0.64us
-    1,                                                                       // .level0
-    static_cast<uint16_t>( 0.4 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),    // .duration1 = T1L=0.4us
-    0                                                                        // .level1
+    static_cast<uint16_t>( 0.9 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),   // .duration0 = T1H=0.9us
+    1,                                                                      // .level0
+    static_cast<uint16_t>( 0.3 * RMT_LED_STRIP_RESOLUTION_HZ / 1000000 ),   // .duration1 = T1L=0.3us
+    0                                                                       // .level1
 };
 
-static const rmt_symbol_word_t sk6812_reset = {                                 /* SK6812 reset is 90uS */
-    static_cast<uint16_t>( RMT_LED_STRIP_RESOLUTION_HZ / 1000000 * 90 / 2 ),    //.duration0 = 45us
+static const rmt_symbol_word_t sk6812_reset = {                                 /* SK6812 reset sent is 210uS (datasheet: > 80uS) */
+    static_cast<uint16_t>( RMT_LED_STRIP_RESOLUTION_HZ / 1000000 * 210 / 2 ),   //.duration0 = 105us
     0,                                                                          // .level0
-    static_cast<uint16_t>( RMT_LED_STRIP_RESOLUTION_HZ / 1000000 * 90 / 2 ),    //.duration1 = 45us
+    static_cast<uint16_t>( RMT_LED_STRIP_RESOLUTION_HZ / 1000000 * 210 / 2 ),   //.duration1 = 105us
     0                                                                           // .level1
 };
 
@@ -160,6 +164,7 @@ static const char *led_type[] = {
     "apa106",
     "sm16703",
     "ws281xv7",
+    "apa106r2",
     "custom"
 };
 
@@ -222,11 +227,37 @@ static const ll_custom_timing_t ll_ws281xv7_timing = {
 };
 #define LL_WS281XV7_ORDER ORDER_GRB
 
+// APA106R2 preset: APA106 with the datasheet timing (Shenzhen LED Color, 2014): T0H 0.35, T0L 1.36,
+// T1H 1.36, T1L 0.35 us, each +/-150 ns, reset 50 us. LED_STRIP_APA106 keeps its old timing; its RMT
+// output is within the tolerance but its PARLIO output (400/800/800/400 ns) is not.
+// PARLIO: a 50 ns tolerance (inside the +/-150 ns) settles at 5 MHz: 400/1400/1400/400 ns.
+static const ll_custom_timing_t ll_apa106r2_timing = {
+    .t0h_ns = 350, .t0l_ns = 1360, .t1h_ns = 1360, .t1l_ns = 350, .reset_us = 50,
+    .parlio_tolerance_ns = 50
+};
+#define LL_APA106R2_ORDER ORDER_RGB
+
+// The preset (timing and colour order) of a built-in type that is built at construction, or NULL.
+static inline const ll_custom_timing_t *ll_preset_timing( led_strip_type_t type, color_order_t *order ) {
+    switch ( type ) {
+        case LED_STRIP_WS281XV7:
+            *order = LL_WS281XV7_ORDER;
+            return &ll_ws281xv7_timing;
+        case LED_STRIP_APA106R2:
+            *order = LL_APA106R2_ORDER;
+            return &ll_apa106r2_timing;
+        default:
+            return NULL;
+    }
+}
+
 // Build the RMT parameters of a preset type into the strip. begin() reports a failure.
 static inline void ll_apply_preset_rmt( led_strip_t &s ) {
-    if ( s.type == LED_STRIP_WS281XV7 ) {
-        s.resolution_hz = ll_ws281xv7_timing.resolution_hz;
-        s.timing_err = ll_build_custom_params( ll_ws281xv7_timing, LL_WS281XV7_ORDER, s.params );
+    color_order_t order;
+    const ll_custom_timing_t *t = ll_preset_timing( ( led_strip_type_t )s.type, &order );
+    if ( t ) {
+        s.resolution_hz = t->resolution_hz;
+        s.timing_err = ll_build_custom_params( *t, order, s.params );
     }
 }
 
@@ -319,9 +350,11 @@ static inline esp_err_t ll_build_parlio_params( const ll_custom_timing_t &t, col
 
 // Build the PARLIO parameters of a preset type into the strip. begin() reports a failure.
 static inline void ll_apply_preset_pio( led_strip_t &s ) {
-    if ( s.type == LED_STRIP_WS281XV7 ) {
-        s.params.order = LL_WS281XV7_ORDER;     /* colour order is read via ll_strip_params() */
-        s.timing_err = ll_build_parlio_params( ll_ws281xv7_timing, LL_WS281XV7_ORDER, s.pio );
+    color_order_t order;
+    const ll_custom_timing_t *t = ll_preset_timing( ( led_strip_type_t )s.type, &order );
+    if ( t ) {
+        s.params.order = order;     /* colour order is read via ll_strip_params() */
+        s.timing_err = ll_build_parlio_params( *t, order, s.pio );
     }
 }
 
