@@ -11,6 +11,10 @@ esp_err_t led_strip_init( led_strip_t *strip ) {
         log_d( "Error: Invalid arguments." );
         return ESP_ERR_INVALID_ARG;
     }
+    if ( strip->timing_err != ESP_OK ) {
+        log_d( "Error: Invalid custom timing (a time rounds to 0 ticks or exceeds the RMT range)." );
+        return strip->timing_err;
+    }
 
     // Populate the stripCfg struct with the necessary values
     strip->stripCfg.led_chan = NULL;
@@ -18,7 +22,7 @@ esp_err_t led_strip_init( led_strip_t *strip ) {
     strip->stripCfg.led_chan_config = {
         .gpio_num = ( gpio_num_t )strip->gpio,
         .clk_src = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = RMT_LED_STRIP_RESOLUTION_HZ,
+        .resolution_hz = strip->resolution_hz ? strip->resolution_hz : RMT_LED_STRIP_RESOLUTION_HZ,
         .mem_block_symbols = LL_MEM_BLOCK_SIZE_DEFAULT,
         .trans_queue_depth = 4,  /* Number of transactions that can be pending in the background */
         #if LL_INT_PRIORITY_SUPPORT
@@ -297,6 +301,11 @@ void led_strip_debug_dump( led_strip_t *strip ) {
         log_printf( "LiteLED version: %s\n", LITELED_VERSION_STR );
         log_printf( "LED strip object at: %p\n", strip );
         log_printf( "    type: %s\n", led_type[ strip->type ] );
+        log_printf( "    RMT resolution: %u Hz\n", ( unsigned )( strip->resolution_hz ? strip->resolution_hz : RMT_LED_STRIP_RESOLUTION_HZ ) );
+        log_printf( "    ticks T0H/T0L/T1H/T1L/reset-half: %u/%u/%u/%u/%u\n",
+                    ll_strip_params( strip ).led_0.duration0, ll_strip_params( strip ).led_0.duration1,
+                    ll_strip_params( strip ).led_1.duration0, ll_strip_params( strip ).led_1.duration1,
+                    ll_strip_params( strip ).led_reset.duration0 );
         log_printf( "    is_rgbw: %d\n", strip->is_rgbw );
         log_printf( "    auto_w: %d\n", strip->auto_w );
         log_printf( "    brightness: %d\n", strip->brightness );
@@ -344,7 +353,7 @@ void led_strip_debug_dump( led_strip_t *strip ) {
         log_printf( "    led_encoder: %p\n", strip->stripCfg.led_encoder );
         log_printf( "    led_encoder chunk size: %d\n", strip->stripCfg.led_encoder_cfg.min_chunk_size );
         log_printf( "    -----------------------------------------\n" );
-        log_printf( "    led color order: %s\n", col_ord[ led_params[ strip->type ].order ] );
+        log_printf( "    led color order: %s\n", col_ord[ ll_strip_params( strip ).order ] );
         log_printf( "    led custom color order: %s\n", col_ord[ custom_color_order ] );
         log_printf( "    led use custom color order: %s\n", use_custom_color_order ? "true" : "false" );
         log_printf( "    -----------------------------------------\n" );

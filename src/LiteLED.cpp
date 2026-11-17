@@ -29,12 +29,22 @@ static void ll_log_capabilities() {
 LiteLED::LiteLED( led_strip_type_t led_type, bool rgbw ) {
     // populate the LED strip type structure
     theStrip.type = led_type;
+    theStrip.resolution_hz = 0;
+    theStrip.timing_err = ( led_type == LED_STRIP_CUSTOM ) ? ESP_ERR_INVALID_ARG : ESP_OK;   /* CUSTOM needs the timing constructor */
     theStrip.is_rgbw = rgbw;
     theStrip.brightness = 255;
     theStrip.bright_act = 255;
     theStrip.buf = NULL;
     theStrip.use_psram = false;  // Default to internal RAM
+    ll_apply_preset_rmt( theStrip );    // WS281XV7: build timing from the preset
     valid_instance = false;      // Not valid until begin() succeeds
+}
+
+// constructor, custom timing
+LiteLED::LiteLED( const ll_custom_timing_t &timing, color_order_t order, bool rgbw )
+    : LiteLED( LED_STRIP_CUSTOM, rgbw ) {
+    theStrip.resolution_hz = timing.resolution_hz;
+    theStrip.timing_err = ll_build_custom_params( timing, order, theStrip.params );
 }
 
 // destructor

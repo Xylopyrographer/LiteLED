@@ -31,8 +31,8 @@ size_t led_encoder_cb( const void* data, size_t data_size,
         size_t symbol_pos = 0;
         for ( int bitmask = 0x80; bitmask != 0; bitmask >>= 1 ) {
             symbols[ symbol_pos++ ] = ( currentByte & bitmask ) ?
-                                      led_params[ strip->type ].led_1 :
-                                      led_params[ strip->type ].led_0;
+                                      ll_strip_params( strip ).led_1 :
+                                      ll_strip_params( strip ).led_0;
         }
 
         // Update the current position in the buffer
@@ -44,7 +44,7 @@ size_t led_encoder_cb( const void* data, size_t data_size,
     else {
         // All bytes have been encoded.
         // Encode the reset symbol, and we're done.
-        symbols[ 0 ] = led_params[ strip->type ].led_reset;
+        symbols[ 0 ] = ll_strip_params( strip ).led_reset;
         strip->stripCfg.enc_pos = 0;    // Reset the position in the buffer
         *done = 1;                      // Indicate end of the transaction
         return 1;                       // We only wrote one symbol

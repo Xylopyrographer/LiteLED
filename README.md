@@ -1,10 +1,10 @@
 # LiteLED
 
-## v3.2.0
+## v3.3.0
 
 ## What is it?
 
-LiteLED is an arduino-esp32 library for the Espressif ESP32 series of SoC's for controlling WS2812B, SK6812, APA106 and SM16703 intelligent "clockless" RGB colour LED's.
+LiteLED is an arduino-esp32 library for the Espressif ESP32 series of SoC's for controlling WS2812B, SK6812, APA106 and SM16703 intelligent "clockless" RGB colour LED's, and the WorldSemi WS281x family (WS2811, WS2812B, WS2813 and WS2815).
 
 It provides hardware-accelerated LED control via the **RMT** peripheral or the **PARLIO** parallel-IO peripheral. Supports driving multiple LED strips, arbitrary colour orders, DMA transfers, interrupt priority, and buffer allocation to either internal RAM or PSRAM.
 
@@ -39,6 +39,18 @@ Both drivers can be used concurrently as supported by the SoC hardware.
 **Configurable Color Order**
 
 - Though the RGB colour order for the supported LED types is supposed to be standard, some are not. The library lets you set any R, G, and B colour order for any LED type to manage those cases. No need to modify colour definitions in the sketch.
+
+**WorldSemi WS281x**
+
+- `LED_STRIP_WS281XV7` uses the timing recommended by WorldSemi for the WS281x family (T0H 325 ns, T0L 925 ns), with T1 and reset values that lie inside the data sheet windows of the WS2811, WS2812B, WS2813 and WS2815 parts.
+- Works with the RMT and PARLIO drivers, including `LiteLEDpioGroup`.
+- See the `ws281xv7` example.
+
+**Custom LED Timing**
+
+- For an LED type that isn't one of the built-in types, supply your own T0H, T0L, T1H, T1L and reset timing.
+- Works with both the RMT driver (25 ns tick by default) and the PARLIO driver (clock chosen automatically to meet a tolerance you set).
+- See *Custom LED Timing* in *Using LiteLED.md*, and the `custom_timing` example.
 
 **DMA Support**
 
@@ -151,6 +163,15 @@ For issues, feature requests, or contributions, please visit the library reposit
 ---
 
 ## Version History
+
+### v3.3.0
+
+- Feat: Add `LED_STRIP_WS281XV7`, a built-in type for the WorldSemi WS281x family using the timing from the WS2812B V7 data sheet (T0 325/925 ns, T1 625/625 ns, reset 400 µs). Works with `LiteLED`, `LiteLEDpio` and `LiteLEDpioGroup`.
+- Add `ws281xv7` example.
+- Feat: Custom LED timing: `LED_STRIP_CUSTOM`, `ll_custom_timing_t` and a `LiteLED( timing, order, rgbw )` constructor for the RMT driver.
+- Feat: Custom LED timing for the PARLIO driver: `LiteLEDpio( timing, order, rgbw )`. The PARLIO clock and samples per bit are chosen automatically to meet `parlio_tolerance_ns`. Not supported by `LiteLEDpioGroup`.
+- Change: The PARLIO encoder now works from per-phase sample counts rather than a fixed 3-sample pattern. The timing of the built-in LED types is unchanged.
+- Add `custom_timing` example.
 
 ### v3.2.0
 

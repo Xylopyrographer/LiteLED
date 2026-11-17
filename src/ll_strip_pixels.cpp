@@ -32,7 +32,7 @@ esp_err_t led_strip_set_pixel( led_strip_t *strip, size_t num, rgb_t color ) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    color_order_t order = use_custom_color_order ? custom_color_order : led_params[ strip->type ].order;
+    color_order_t order = use_custom_color_order ? custom_color_order : ll_strip_params( strip ).order;
     size_t idx = num * COLOR_SIZE( strip );
 
     switch ( order ) {
@@ -108,7 +108,7 @@ rgb_t led_strip_get_pixel( led_strip_t *strip, size_t num ) {
     }
 
     size_t idx = num * COLOR_SIZE( strip );
-    color_order_t order = use_custom_color_order ? custom_color_order : led_params[ strip->type ].order;
+    color_order_t order = use_custom_color_order ? custom_color_order : ll_strip_params( strip ).order;
 
     switch ( order ) {
         case ORDER_RGB:
@@ -234,7 +234,7 @@ esp_err_t led_strip_set_color_order( led_strip_t *strip, color_order_t led_order
 
 esp_err_t led_strip_set_default_color_order( led_strip_t *strip ) {
     /* Sets the color order of the LED's in the strip to the value defined by the LED type parameters */
-    custom_color_order = led_params[ strip->type ].order;
+    custom_color_order = ll_strip_params( strip ).order;
     use_custom_color_order = false;
     log_d( "Setting the color order to its default: %s.", col_ord[ custom_color_order ] );
     log_d( "Custom color order now set to: %s.", use_custom_color_order ? "true" : "false" );

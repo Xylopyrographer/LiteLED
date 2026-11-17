@@ -77,9 +77,12 @@ esp_err_t parlio_group_free( parlio_group_cfg_t *cfg );
 // ---- PARLIO Peripheral Manager integration -------------------------
 
 // Resolved bus type token for periman.
-// ESP32_BUS_TYPE_PARLIO_TX is not yet defined in any released
-// arduino-esp32 version (confirmed through 3.3.8).  When it is added
-// upstream, the dedicated path becomes active automatically.
+// ESP32_BUS_TYPE_PARLIO_TX is not defined in any released
+// arduino-esp32 version (confirmed through 3.3.12).
+// NOTE: periman bus types are enum constants, not macros, so the
+// #ifdef below can never see one.  When upstream adds the type, replace
+// these tests with an ESP_ARDUINO_VERSION_VAL() check against the first
+// release that contains it (and test the dedicated path on hardware).
 #ifdef ESP32_BUS_TYPE_PARLIO_TX
     #define LL_PARLIO_BUS_TYPE  ESP32_BUS_TYPE_PARLIO_TX
 #else

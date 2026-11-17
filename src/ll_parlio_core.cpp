@@ -35,15 +35,13 @@
 // No bit-packing, no DMA endianness issue.
 // -------------------------------------------------------------------------
 static IRAM_ATTR void parlio_encode_byte( uint8_t b,
-        uint8_t bit0_pat,
-        uint8_t bit1_pat,
+        const parlio_led_params_t *p,
         uint8_t *out ) {
     for ( int i = 7; i >= 0; i-- ) {
-        uint8_t pat = ( ( b >> i ) & 1 ) ? bit1_pat : bit0_pat;
-        // expand 3-bit sample pattern, each bit → one full DMA byte on bit0
-        *out++ = ( pat >> 2 ) & 1;  // sample 0 (MSB of pattern)
-        *out++ = ( pat >> 1 ) & 1;  // sample 1
-        *out++ =   pat        & 1;  // sample 2 (LSB of pattern)
+        const uint8_t nh = ( ( b >> i ) & 1 ) ? p->n1h : p->n0h;   // high samples for this bit
+        for ( uint8_t s = 0; s < p->samples_per_bit; s++ ) {
+            *out++ = ( s < nh ) ? 1 : 0;
+        }
     }
 }
 
@@ -52,6 +50,10 @@ esp_err_t parlio_strip_init( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     if ( !( strip && cfg && strip->length > 0 && strip->type < LED_STRIP_TYPE_MAX ) ) {
         log_d( "parlio_strip_init: invalid arguments" );
         return ESP_ERR_INVALID_ARG;
+    }
+    if ( strip->timing_err != ESP_OK ) {
+        log_d( "parlio_strip_init: no PARLIO clock can meet the custom timing within the tolerance" );
+        return strip->timing_err;
     }
     cfg->parlio_chan      = NULL;
     cfg->parlio_buf       = NULL;
@@ -99,10 +101,10 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     }
 
     // ---- allocate DMA bitstream buffer (must be internal DMA-capable RAM) -
-    const parlio_led_params_t *p = &parlio_led_params[ strip->type ];
+    const parlio_led_params_t *p = &ll_pio_params( strip );
     // data_width=8: each input byte expands to (samples_per_bit × 8) = 24 DMA bytes
     size_t encoded_bytes  = pixel_bytes * p->samples_per_bit * 8;
-    size_t total_bytes    = encoded_bytes + PARLIO_RESET_BYTES;  // + 400 µs LOW
+    size_t total_bytes    = encoded_bytes + p->reset_samples;  // + 400 µs LOW
     total_bytes           = ( total_bytes + 3 ) & ~( size_t )3;  // 4-byte aligned
 
     cfg->parlio_buf = ( uint8_t* )heap_caps_calloc( 1, total_bytes,
@@ -115,7 +117,7 @@ esp_err_t parlio_strip_install( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     }
     cfg->parlio_buf_bytes = total_bytes;
     log_d( "PARLIO DMA buffer: %u bytes (%u encoded + %u reset, aligned)",
-           total_bytes, encoded_bytes, PARLIO_RESET_BYTES );
+           total_bytes, encoded_bytes, p->reset_samples );
 
     // ---- create PARLIO TX unit -------------------------------------------
     parlio_tx_unit_config_t chan_cfg = {};
@@ -209,22 +211,22 @@ esp_err_t parlio_strip_flush( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    const parlio_led_params_t *p     = &parlio_led_params[ strip->type ];
+    const parlio_led_params_t *p     = &ll_pio_params( strip );
     const size_t               pixel_bytes = strip->length * PIO_COLOR_SIZE( strip );
     const uint8_t              brightness  = strip->brightness;
     uint8_t                   *out         = cfg->parlio_buf;
 
     // Encode each pixel colour byte → 3 PARLIO bytes, with brightness scaling.
-    // The reset region (trailing PARLIO_RESET_BYTES bytes = 0x00) is never
+    // The reset region (trailing p->reset_samples bytes = 0x00) is never
     // written here; it was zeroed by calloc and stays zero across calls.
     for ( size_t i = 0; i < pixel_bytes; i++ ) {
         parlio_encode_byte( scale8_video( strip->buf[ i ], brightness ),
-                            p->bit0_pattern, p->bit1_pattern,
+                            p,
                             &out[ i * p->samples_per_bit * 8 ] );
     }
 
     // Transmit bitstream (pixel data + reset) via DMA.
-    // total_bytes includes PARLIO_RESET_BYTES of trailing zeros.
+    // total_bytes includes p->reset_samples of trailing zeros.
     parlio_transmit_config_t tx_cfg = { .idle_value = 0 };
     esp_err_t res = parlio_tx_unit_transmit( cfg->parlio_chan,
                     cfg->parlio_buf,
@@ -246,7 +248,7 @@ esp_err_t parlio_strip_flush( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
 void parlio_strip_debug_dump( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
     #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_VERBOSE
     if ( strip && cfg ) {
-        const parlio_led_params_t *p = &parlio_led_params[ strip->type ];
+        const parlio_led_params_t *p = &ll_pio_params( strip );
         log_printf( "\n" );
         log_printf( "========= LiteLED PARLIO Debug Report =========\n" );
         log_printf( "LiteLED version: %s\n", LITELED_VERSION_STR );
@@ -265,11 +267,11 @@ void parlio_strip_debug_dump( led_strip_t *strip, parlio_strip_cfg_t *cfg ) {
         log_printf( "parlio_led_params:\n" );
         log_printf( "    clk_hz:          %lu\n",  p->clk_hz );
         log_printf( "    samples_per_bit: %u\n",   p->samples_per_bit );
-        log_printf( "    bit0_pattern:    0x%02X\n", p->bit0_pattern );
-        log_printf( "    bit1_pattern:    0x%02X\n", p->bit1_pattern );
-        log_printf( "    PARLIO_RESET_BYTES: %u (%.1f us)\n",
-                    PARLIO_RESET_BYTES,
-                    ( float )PARLIO_RESET_BYTES * 8.0f / ( p->clk_hz / 1e6f ) );
+        log_printf( "    samples T0H/T0L/T1H/T1L: %u/%u/%u/%u (%.0f ns per sample)\n",
+                    p->n0h, p->n0l, p->n1h, p->n1l, 1e9f / p->clk_hz );
+        log_printf( "    reset_samples:   %lu (%.1f us)\n",
+                    ( unsigned long )p->reset_samples,
+                    ( float )p->reset_samples / ( p->clk_hz / 1e6f ) );
         log_printf( "================================================\n" );
         log_printf( "\n" );
     }
@@ -306,8 +308,12 @@ esp_err_t parlio_group_install( parlio_group_cfg_t *cfg ) {
         log_d( "parlio_group_install: no assigned lanes found" );
         return ESP_ERR_INVALID_ARG;
     }
+    if ( cfg->lanes[ first ].strip.type >= LED_STRIP_CUSTOM ) {
+        log_d( "parlio_group_install: custom timing is not supported by LiteLEDpioGroup" );
+        return ESP_ERR_INVALID_ARG;
+    }
 
-    const parlio_led_params_t *p          = &parlio_led_params[ cfg->lanes[ first ].strip.type ];
+    const parlio_led_params_t *p          = &ll_pio_params( &cfg->lanes[ first ].strip );
     const size_t               color_size = 3 + ( cfg->lanes[ first ].strip.is_rgbw ? 1 : 0 );
     const size_t               length     = cfg->lanes[ first ].strip.length;
     const size_t               pixel_bytes = length * color_size;
@@ -349,7 +355,7 @@ esp_err_t parlio_group_install( parlio_group_cfg_t *cfg ) {
 
     // Allocate shared DMA bitstream buffer (always internal DMA-capable RAM).
     size_t encoded_bytes = pixel_bytes * p->samples_per_bit * 8;
-    size_t total_bytes   = ( encoded_bytes + PARLIO_RESET_BYTES + 3 ) & ~( size_t )3;
+    size_t total_bytes   = ( encoded_bytes + p->reset_samples + 3 ) & ~( size_t )3;
 
     cfg->parlio_buf = ( uint8_t * )heap_caps_calloc( 1, total_bytes,
                       MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL );
@@ -365,7 +371,7 @@ esp_err_t parlio_group_install( parlio_group_cfg_t *cfg ) {
     }
     cfg->parlio_buf_bytes = total_bytes;
     log_d( "PARLIO group DMA buffer: %u bytes (%u encoded + %u reset, %u lanes)",
-           total_bytes, encoded_bytes, PARLIO_RESET_BYTES, cfg->lane_count );
+           total_bytes, encoded_bytes, p->reset_samples, cfg->lane_count );
 
     // Create PARLIO TX unit — data_width=8, one GPIO per assigned lane.
     parlio_tx_unit_config_t chan_cfg = {};
@@ -444,13 +450,13 @@ esp_err_t parlio_group_flush( parlio_group_cfg_t *cfg ) {
         first++;
     }
 
-    const parlio_led_params_t *p          = &parlio_led_params[ cfg->lanes[ first ].strip.type ];
+    const parlio_led_params_t *p          = &ll_pio_params( &cfg->lanes[ first ].strip );
     const size_t               color_size = 3 + ( cfg->lanes[ first ].strip.is_rgbw ? 1 : 0 );
     const size_t               pixel_bytes = cfg->lanes[ first ].strip.length * color_size;
     const size_t               spb         = p->samples_per_bit;  // 3
 
     // Zero entire DMA buffer.  The encoded region gets |= filled per lane;
-    // the reset tail (trailing PARLIO_RESET_BYTES) stays zero.
+    // the reset tail (trailing p->reset_samples) stays zero.
     memset( cfg->parlio_buf, 0, cfg->parlio_buf_bytes );
 
     // Encode each lane into its bit position.
@@ -465,12 +471,12 @@ esp_err_t parlio_group_flush( parlio_group_cfg_t *cfg ) {
             uint8_t val = scale8_video( strip->buf[ b ], bright );
             // Expand all 8 bits of val, MSB first.
             for ( int bit = 7; bit >= 0; bit-- ) {
-                uint8_t pat    = ( ( val >> bit ) & 1 ) ? p->bit1_pattern : p->bit0_pattern;
+                const uint8_t nh = ( ( val >> bit ) & 1 ) ? p->n1h : p->n0h;
                 // DMA byte index for the first sample of this bit slot.
                 size_t  offset = b * spb * 8 + ( size_t )( 7 - bit ) * spb;
-                cfg->parlio_buf[ offset + 0 ] |= ( uint8_t )( ( ( pat >> 2 ) & 1 ) << n );
-                cfg->parlio_buf[ offset + 1 ] |= ( uint8_t )( ( ( pat >> 1 ) & 1 ) << n );
-                cfg->parlio_buf[ offset + 2 ] |= ( uint8_t )( (   pat        & 1 ) << n );
+                for ( size_t s = 0; s < nh; s++ ) {
+                    cfg->parlio_buf[ offset + s ] |= ( uint8_t )( 1u << n );
+                }
             }
         }
     }

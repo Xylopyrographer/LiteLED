@@ -225,6 +225,7 @@ LiteLEDpioLane &LiteLEDpioGroup::_addStrip( uint8_t lane_idx, uint8_t gpio ) {
     strip.bright_act   = _brightness;
     strip.buf          = NULL;
     strip.use_psram    = false;
+    ll_apply_preset_pio( strip );   // WS281XV7: build timing from the preset
 
     _groupCfg.lanes[ lane_idx ].assigned = true;
     _groupCfg.lane_count++;
