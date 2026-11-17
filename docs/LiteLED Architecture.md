@@ -89,8 +89,9 @@ LiteLED.h (Main Public API — RMT and PARLIO drivers)
   - WS2812/WS2812B (GRB)
   - APA106 (RGB)
   - SM16703 (RGB)
-  - SK6812 (RGBW)
+  - SK6812 (RGBW; its own constants, the v3.2.0 timing, not borrowed from SM16703)
   - WS281XV7 (WorldSemi WS281x, built from a preset at construction; see below)
+  - APA106R2 (APA106 data sheet timing, built from a preset at construction; see below)
 - Stores timing values for logical 0, logical 1, and reset pulses
 - Provides `led_params[]` lookup array indexed by LED type
 - Manages colour order configuration (standard and custom)
@@ -114,12 +115,17 @@ extern led_timing_params_t led_params[4];  // Indexed by led_type_t
 
 **Custom timing (v3.3.0):**
 
-- `LED_STRIP_WS281XV7` and `LED_STRIP_CUSTOM` are the last two LED types before `LED_STRIP_TYPE_MAX`. Neither has an entry in `led_params[]` or `parlio_led_params[]`; their parameters are built into the strip when it is constructed.
+- The preset types (`LED_STRIP_WS281XV7`, `LED_STRIP_APA106R2`) and `LED_STRIP_CUSTOM` are the last LED types before `LED_STRIP_TYPE_MAX`. None has an entry in `led_params[]` or `parlio_led_params[]`; their parameters are built into the strip when it is constructed. Rule: a type's timing never changes; a data sheet correction is a new type named with `R2` appended (`R` = LiteLED revision; `V` in a name such as `WS281XV7` means an OEM data sheet version), placed before `LED_STRIP_CUSTOM`.
 - `ll_strip_params( strip )` returns the RMT parameters for a strip: `strip->params` for types from `LED_STRIP_WS281XV7` up, else `led_params[ strip->type ]`. The encoder and pixel code use it.
 - `ll_pio_params( strip )` does the same for PARLIO (`strip->pio` or `parlio_led_params[]`).
 - `ll_build_custom_params()` converts an `ll_custom_timing_t` to RMT symbols, rounding to the nearest tick, and returns `ESP_ERR_INVALID_ARG` if any time rounds to zero ticks or exceeds the 15-bit RMT duration field.
 - `ll_build_parlio_params()` chooses the PARLIO clock: the lowest of 2.5/3.2/4/5/8/10/16/20/40 MHz at which T0H/T0L/T1H/T1L each round to within `parlio_tolerance_ns`, with at most 64 samples per bit.
 - The RMT resolution is per strip (`strip->resolution_hz`; `0` means the 10 MHz default used by the table-driven built-in types).
+
+**APA106R2 preset (v3.3.1):**
+
+- `ll_apa106r2_timing`: T0H/T0L 350/1360 ns, T1H/T1L 1360/350 ns, reset 50 µs, `parlio_tolerance_ns` 50, colour order `LL_APA106R2_ORDER` (RGB). RMT at the default 40 MHz sends 350/1350/1350/350 ns; PARLIO settles at 5 MHz, 2/7/7/2 samples, 400/1400/1400/400 ns.
+- `ll_preset_timing( type, &order )` returns the preset for a type (or `NULL`); `ll_apply_preset_rmt()` and `ll_apply_preset_pio()` use it, so adding a preset type needs only a table entry, an enum value and a name in `led_type[]`.
 
 **WS281XV7 preset (v3.3.0):**
 
@@ -774,6 +780,10 @@ Modules depend only on what they need:
 ---
 
 ## Version History
+
+**v3.3.1 (in development)**
+- `LED_STRIP_SK6812` has its own RMT constants again (identical on the wire to v3.2.0: 300/900/900/300 ns, 210 µs reset); the v3.3.0 values (1-bit 600/400, 90 µs reset) are gone
+- Added `LED_STRIP_APA106R2` (see above) and `ll_preset_timing()`
 
 **v3.3.0**
 - Added the `LED_STRIP_WS281XV7` built-in type (WorldSemi WS281x family, WS2812B V7 timing): preset `ll_ws281xv7_timing` in `ll_led_timings.h` (325/925/625/625 ns, reset 400 us, `parlio_tolerance_ns` 15), applied by `ll_apply_preset_rmt()` / `ll_apply_preset_pio()`; works with `LiteLED`, `LiteLEDpio` and `LiteLEDpioGroup`
