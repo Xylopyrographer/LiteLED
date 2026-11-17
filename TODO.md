@@ -61,7 +61,7 @@ Loopback-verified on ESP32-PICO-D4, S3, C6 and P4 (RMT, and PARLIO on C6 and P4)
 
 ## PARLIO Peripheral Manager bus type
 
-arduino-esp32 has no `ESP32_BUS_TYPE_PARLIO_TX` (checked through 3.3.12 and `master`), so PARLIO pins are registered as `ESP32_BUS_TYPE_GPIO` with no deinit callback. Requested upstream: https://github.com/espressif/arduino-esp32/issues/13130. PR adding the type: https://github.com/espressif/arduino-esp32/pull/13131 (opened 2026-11-17; the maintainers said it will not be in 3.3.13 or 4.0.0). The PR also defines the name as a macro, so the existing `#ifdef` would work unchanged if it is merged as is; if that hunk is dropped, use the version check below.
+arduino-esp32 has no `ESP32_BUS_TYPE_PARLIO_TX` (checked through 3.3.12 and `master`), so PARLIO pins are registered as `ESP32_BUS_TYPE_GPIO` with no deinit callback. Requested upstream: https://github.com/espressif/arduino-esp32/issues/13130. PR adding the type: https://github.com/espressif/arduino-esp32/pull/13131 (opened 2026-11-17; the maintainers said it will not be in 3.3.13 or 4.0.0). The PR adds TX and RX types and, at the maintainers' request, no detection macro: use the version check below.
 
 When a core ships the type: the `#ifdef ESP32_BUS_TYPE_PARLIO_TX` tests in `ll_parlio_core.h`, `LiteLEDpio.cpp`, `LiteLEDpioGroup.cpp` and `ll_parlio_core.cpp` can never be true (bus types are enum constants), so replace them with an `ESP_ARDUINO_VERSION_VAL()` check against the first release that has it, then test the dedicated path on a PARLIO chip.
 
