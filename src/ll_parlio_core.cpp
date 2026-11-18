@@ -591,6 +591,9 @@ bool ll_parlio_deinit_cb( void *bus_handle ) {
     for ( int i = 0; i < LL_PARLIO_MAX_INSTANCES; i++ ) {
         if ( s_parlio_inst[ i ].chan == chan ) {
             if ( s_parlio_inst[ i ].valid_flag ) {
+                if ( *s_parlio_inst[ i ].valid_flag ) {
+                    ll_parlio_count_add( -1 );     // the instance becomes invalid here
+                }
                 *s_parlio_inst[ i ].valid_flag = false;
             }
             s_parlio_inst[ i ].chan       = NULL;
@@ -625,6 +628,31 @@ void ll_parlio_periman_begin( parlio_tx_unit_handle_t chan, bool *valid_flag ) {
     #else
     ( void )chan;
     ( void )valid_flag;
+    #endif
+}
+
+static uint8_t s_parlio_active = 0;
+
+uint8_t ll_parlio_active_count() {
+    return s_parlio_active;
+}
+
+void ll_parlio_count_add( int delta ) {
+    int n = ( int )s_parlio_active + delta;
+    s_parlio_active = ( uint8_t )( n < 0 ? 0 : n );
+}
+
+bool ll_parlio_pin_owned( uint8_t gpio, parlio_tx_unit_handle_t chan, const char *tag ) {
+    #ifdef ESP32_BUS_TYPE_PARLIO_TX
+    // dedicated bus type: the pin's bus handle is our PARLIO unit
+    ( void )tag;
+    return perimanGetPinBus( gpio, LL_PARLIO_BUS_TYPE ) == ( void * )chan;
+    #else
+    // GPIO fallback: the handle is NULL, so identify the pin by the extra type we set. A takeover
+    // by another peripheral clears it.
+    ( void )chan;
+    const char *extra = perimanGetPinBusExtraType( gpio );
+    return perimanGetPinBusType( gpio ) == LL_PARLIO_BUS_TYPE && extra && strcmp( extra, tag ) == 0;
     #endif
 }
 

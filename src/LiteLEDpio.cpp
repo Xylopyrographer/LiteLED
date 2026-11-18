@@ -67,7 +67,8 @@ LiteLEDpio::~LiteLEDpio() {
 // begin() — simple form
 // -------------------------------------------------------------------------
 esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length, bool auto_w ) {
-    if ( valid_instance ) {
+    // (also when the Peripheral Manager invalidated it: the PARLIO unit is still allocated)
+    if ( valid_instance || parlioCfg.parlio_chan ) {
         log_d( "LiteLEDpio: already initialized, cleaning up first" );
         free();
     }
@@ -110,6 +111,7 @@ esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length, bool auto_w ) {
     }
     perimanSetPinBusExtraType( data_pin, "LiteLEDpio" );
     valid_instance = true;
+    ll_parlio_count_add( 1 );
     ll_parlio_periman_begin( parlioCfg.parlio_chan, &valid_instance );
 
     return ESP_OK;
@@ -120,7 +122,8 @@ esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length, bool auto_w ) {
 // -------------------------------------------------------------------------
 esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length,
                              ll_psram_t psram_flag, bool auto_w ) {
-    if ( valid_instance ) {
+    // (also when the Peripheral Manager invalidated it: the PARLIO unit is still allocated)
+    if ( valid_instance || parlioCfg.parlio_chan ) {
         log_d( "LiteLEDpio: already initialized, cleaning up first" );
         free();
     }
@@ -169,6 +172,7 @@ esp_err_t LiteLEDpio::begin( uint8_t data_pin, size_t length,
     }
     perimanSetPinBusExtraType( data_pin, "LiteLEDpio" );
     valid_instance = true;
+    ll_parlio_count_add( 1 );
     ll_parlio_periman_begin( parlioCfg.parlio_chan, &valid_instance );
 
     return ESP_OK;
@@ -323,9 +327,8 @@ bool LiteLEDpio::isGpioAvailable( uint8_t gpio_pin ) {
 }
 
 uint8_t LiteLEDpio::getActiveInstanceCount() {
-    // Reuse the RMT registry count; PARLIO instances are tracked separately
-    // via Peripheral Manager. This is a best-effort count.
-    return 0;  // TODO: add a dedicated PARLIO instance counter if needed
+    // Valid LiteLEDpio strips and LiteLEDpioGroup groups.
+    return ll_parlio_active_count();
 }
 
 // -------------------------------------------------------------------------
@@ -336,10 +339,15 @@ esp_err_t LiteLEDpio::free() {
         return ESP_ERR_INVALID_ARG;  // never initialized
     }
 
+    if ( valid_instance ) {
+        ll_parlio_count_add( -1 );
+    }
     valid_instance = false;
 
-    // Unregister from Peripheral Manager before freeing hardware
-    if ( theStrip.gpio < GPIO_NUM_MAX ) {
+    // Unregister from Peripheral Manager before freeing hardware, but only if the pin is
+    // still ours (another peripheral owns it after a forced reassignment).
+    if ( theStrip.gpio < GPIO_NUM_MAX &&
+            ll_parlio_pin_owned( theStrip.gpio, parlioCfg.parlio_chan, "LiteLEDpio" ) ) {
         if ( !perimanSetPinBus( theStrip.gpio, ESP32_BUS_TYPE_INIT, NULL, -1, -1 ) ) {
             log_d( "LiteLEDpio: failed to unregister GPIO %u from Peripheral Manager",
                    theStrip.gpio );

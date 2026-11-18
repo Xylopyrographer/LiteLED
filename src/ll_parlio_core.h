@@ -127,6 +127,16 @@ void ll_parlio_periman_begin( parlio_tx_unit_handle_t chan,
 // On the GPIO-fallback path: no-op.
 void ll_parlio_periman_end( parlio_tx_unit_handle_t chan );
 
+// Number of valid PARLIO strip and group instances (those that completed begin() and were not
+// freed or invalidated by the Peripheral Manager).
+uint8_t ll_parlio_active_count();
+void    ll_parlio_count_add( int delta );
+
+// True if the GPIO is still registered with the Peripheral Manager to this PARLIO strip or group.
+// False after another peripheral took the pin, so the owner must not release it. 'tag' is the
+// extra type the strip class registered ("LiteLEDpio" / "LiteLEDpioGroup").
+bool ll_parlio_pin_owned( uint8_t gpio, parlio_tx_unit_handle_t chan, const char *tag );
+
 // ---- Internal helpers (used only within ll_parlio_core.cpp) --------
 
 void ll_parlio_register_instance( parlio_tx_unit_handle_t chan,

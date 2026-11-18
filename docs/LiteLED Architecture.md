@@ -784,6 +784,8 @@ Modules depend only on what they need:
 **v3.3.1 (in development)**
 - `LED_STRIP_SK6812` has its own RMT constants again (identical on the wire to v3.2.0: 300/900/900/300 ns, 210 µs reset); the v3.3.0 values (1-bit 600/400, 90 µs reset) are gone
 - Added `LED_STRIP_APA106R2` (see above) and `ll_preset_timing()`
+- Peripheral Manager: the deinit callbacks (RMT `ll_periman_deinit_callback`, PARLIO `ll_parlio_deinit_cb`) still only invalidate the instance. The hardware is now released by the next `begin()` (it frees when the strip still holds hardware, not only when it is valid), `free()` and the destructor. `free()` clears the pin only if the Peripheral Manager still has it registered to the strip (RMT: bus handle is the channel; PARLIO: `ll_parlio_pin_owned()`: bus handle on a dedicated bus type, else the GPIO bus type with the `LiteLEDpio` / `LiteLEDpioGroup` extra type). `LiteLEDpioGroup::begin()` frees an invalidated group first.
+- `ll_parlio_active_count()` / `ll_parlio_count_add()` count valid PARLIO strips and groups (`LiteLEDpio::getActiveInstanceCount()`).
 
 **v3.3.0**
 - Added the `LED_STRIP_WS281XV7` built-in type (WorldSemi WS281x family, WS2812B V7 timing): preset `ll_ws281xv7_timing` in `ll_led_timings.h` (325/925/625/625 ns, reset 400 us, `parlio_tolerance_ns` 15), applied by `ll_apply_preset_rmt()` / `ll_apply_preset_pio()`; works with `LiteLED`, `LiteLEDpio` and `LiteLEDpioGroup`

@@ -259,6 +259,10 @@ esp_err_t LiteLEDpioGroup::begin( ll_psram_t psram_flag ) {
         log_d( "LiteLEDpioGroup::begin: already initialized" );
         return ESP_ERR_INVALID_STATE;
     }
+    if ( _groupCfg.parlio_chan ) {
+        // invalidated by the Peripheral Manager (forced reassignment): the PARLIO unit is still allocated
+        _free();
+    }
     if ( _groupCfg.lane_count == 0 ) {
         log_e( "LiteLEDpioGroup::begin: no strips added — call addStrip() first" );
         return ESP_ERR_INVALID_STATE;
@@ -336,6 +340,7 @@ esp_err_t LiteLEDpioGroup::begin( ll_psram_t psram_flag ) {
     }
 
     _valid = true;
+    ll_parlio_count_add( 1 );
     return ESP_OK;
 }
 
@@ -396,12 +401,16 @@ esp_err_t LiteLEDpioGroup::_free() {
         return ESP_OK;  // never initialized or already freed
     }
 
+    if ( _valid ) {
+        ll_parlio_count_add( -1 );
+    }
     _valid = false;
 
     // Unregister all GPIOs from Peripheral Manager.
     for ( uint8_t n = 0; n < PARLIO_TX_UNIT_MAX_DATA_WIDTH; n++ ) {
         if ( _groupCfg.lanes[ n ].assigned &&
-                _groupCfg.lanes[ n ].strip.gpio < GPIO_NUM_MAX ) {
+                _groupCfg.lanes[ n ].strip.gpio < GPIO_NUM_MAX &&
+                ll_parlio_pin_owned( _groupCfg.lanes[ n ].strip.gpio, _groupCfg.parlio_chan, "LiteLEDpioGroup" ) ) {
             perimanSetPinBus( _groupCfg.lanes[ n ].strip.gpio,
                               ESP32_BUS_TYPE_INIT, NULL, -1, -1 );
         }
