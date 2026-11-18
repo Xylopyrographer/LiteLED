@@ -1,6 +1,6 @@
 # LiteLED
 
-## v3.3.0
+## v3.3.1
 
 ## What is it?
 
@@ -168,7 +168,7 @@ For issues, feature requests, or contributions, please visit the library reposit
 
 ## Version History
 
-### v3.3.1 (in development)
+### v3.3.1
 
 - Fix: `LED_STRIP_SK6812` sends its v3.2.0 timing again. v3.3.0 changed its 1-bit and reset timing (1-bit period 1.0 µs, below the data sheet's 1.2 µs minimum; reset 90 µs). The type now has its own constants.
 - Feat: Add `LED_STRIP_APA106R2`, the APA106 data sheet timing for the RMT and PARLIO drivers. `LED_STRIP_APA106` is unchanged.

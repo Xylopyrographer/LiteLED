@@ -19,7 +19,7 @@ Still to do before 3.3.1:
 
 1. Version bump (`LITELED_VERSION_*`, `library.properties`, README / docs history headings).
 2. Release notes: SK6812 restore, `LED_STRIP_APA106R2`, leak and counter fixes.
-3. Optional: RMT loopback of the new cases on the PICO-D4 and S3; real SK6812 / APA106 strips; an APA106R2 example.
+3. Optional: real SK6812 / APA106 strips; an APA106R2 example. (RMT loopback of the new cases is done on the C6, PICO-D4 and S3, 2026-11-17.)
 4. PR `fix/v3.3.1` to `dev`, then release per `WORKFLOW.md`.
 
 # Open items (v3.3.0 shipped 2026-11-16)
