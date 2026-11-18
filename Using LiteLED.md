@@ -2024,14 +2024,14 @@ Use these for compile-time numeric comparisons:
 A string literal of the form `"MAJOR.MINOR.PATCH"` constructed from the three component macros above.
 
 ```cpp
-#define LITELED_VERSION_STR  "3.3.0"   // (constructed via macro concatenation)
+#define LITELED_VERSION_STR  "3.3.1"   // (constructed via macro concatenation)
 ```
 
 **Example:**
 
 ```cpp
 Serial.printf("LiteLED version: %s\n", LITELED_VERSION_STR);
-// prints: LiteLED version: 3.3.0
+// prints: LiteLED version: 3.3.1
 ```
 
 This string also appears as the first line of every `_debug_dump` verbose log report.
@@ -2047,7 +2047,7 @@ A single integer encoding the full version as `MAJOR * 10000 + MINOR * 100 + PAT
 #define LITELED_VERSION  ( LITELED_VERSION_MAJOR * 10000 + LITELED_VERSION_MINOR * 100 + LITELED_VERSION_PATCH )
 ```
 
-For version 3.3.0 this evaluates to `30300`. Useful for runtime numeric comparisons:
+For version 3.3.1 this evaluates to `30301`. Useful for runtime numeric comparisons:
 
 ```cpp
 if (LITELED_VERSION < 30200) {
@@ -3026,7 +3026,7 @@ void loop() {
 <a name="version-history"></a>
 # Version History
 
-**v3.3.1 (in development)**
+**v3.3.1**
 - Fixed: `LED_STRIP_SK6812` sends its v3.2.0 timing again (T0H 300, T0L 900, T1H 900, T1L 300 ns, reset 210 µs). v3.3.0 changed it to a 1-bit of 600/400 ns and a 90 µs reset, which is shorter than the data sheet's 1.2 µs minimum bit period. The type now has its own timing constants and no longer borrows from SM16703.
 - Added the `LED_STRIP_APA106R2` LED type: the APA106 data sheet timing (350/1360/1360/350 ns, reset 50 µs) for the RMT and PARLIO drivers. `LED_STRIP_APA106` is unchanged.
 - Policy: the timing of an existing LED type does not change. A data sheet correction is a new type with `R2` appended.
