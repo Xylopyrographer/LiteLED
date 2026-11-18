@@ -58,7 +58,7 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, bool auto_w ) {
     ll_log_capabilities();  // Log hardware capabilities once
 
     // If already initialized, clean up first to prevent resource leaks
-    if ( valid_instance ) {
+    if ( valid_instance || theStrip.buf ) {
         log_d( "LiteLED: Instance already initialized, cleaning up before reinitializing" );
         free();
     }
@@ -122,7 +122,7 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, ll_psram_t psram_flag
     ll_log_capabilities();  // Log hardware capabilities once
 
     // If already initialized, clean up first to prevent resource leaks
-    if ( valid_instance ) {
+    if ( valid_instance || theStrip.buf ) {
         log_d( "LiteLED: Instance already initialized, cleaning up before reinitializing" );
         free();
     }
@@ -199,7 +199,7 @@ esp_err_t LiteLED::begin( uint8_t data_pin, size_t length, ll_dma_t dma_flag, ll
     ll_log_capabilities();  // Log hardware capabilities once
 
     // If already initialized, clean up first to prevent resource leaks
-    if ( valid_instance ) {
+    if ( valid_instance || theStrip.buf ) {
         log_d( "LiteLED: Instance already initialized, cleaning up before reinitializing" );
         free();
     }
@@ -474,8 +474,10 @@ esp_err_t LiteLED::free() {
     // Unregister channel -> instance mapping
     ll_unregister_channel_instance( theStrip.stripCfg.led_chan );
 
-    // Unregister from Peripheral Manager
-    if ( theStrip.gpio < GPIO_NUM_MAX ) { // Check if GPIO is valid
+    // Unregister from Peripheral Manager, but only if the pin is still ours. After a forced
+    // reassignment (the deinit callback ran) another peripheral owns it and must keep it.
+    if ( theStrip.gpio < GPIO_NUM_MAX &&
+            perimanGetPinBus( theStrip.gpio, ESP32_BUS_TYPE_RMT_TX ) == ( void * )theStrip.stripCfg.led_chan ) {
         if ( !perimanSetPinBus( theStrip.gpio, ESP32_BUS_TYPE_INIT, NULL, -1, -1 ) ) {
             log_d( "LiteLED: Failed to unregister GPIO %u from Peripheral Manager", theStrip.gpio );
         }

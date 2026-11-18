@@ -1623,7 +1623,7 @@ if (LiteLED::isGpioAvailable(14)) {
 static uint8_t getActiveInstanceCount();
 ```
 
-Returns the number of currently active instances for that driver class.
+Returns the number of currently active instances for that driver class. For `LiteLEDpio` the count includes `LiteLEDpioGroup` groups. An instance stops being active when it is freed or when another peripheral takes its pin and the Peripheral Manager invalidates it (arduino-esp32 cores that have no PARLIO bus type cannot report that for PARLIO strips).
 
 **Example:**
 
@@ -3030,6 +3030,8 @@ void loop() {
 - Fixed: `LED_STRIP_SK6812` sends its v3.2.0 timing again (T0H 300, T0L 900, T1H 900, T1L 300 ns, reset 210 µs). v3.3.0 changed it to a 1-bit of 600/400 ns and a 90 µs reset, which is shorter than the data sheet's 1.2 µs minimum bit period. The type now has its own timing constants and no longer borrows from SM16703.
 - Added the `LED_STRIP_APA106R2` LED type: the APA106 data sheet timing (350/1360/1360/350 ns, reset 50 µs) for the RMT and PARLIO drivers. `LED_STRIP_APA106` is unchanged.
 - Policy: the timing of an existing LED type does not change. A data sheet correction is a new type with `R2` appended.
+- Fixed: when another peripheral took a strip's pin, the Peripheral Manager callback marked the strip invalid but the RMT channel or PARLIO unit stayed allocated. Calling `begin()` again on the same object, or deleting it, now releases the hardware, so repeated takeovers no longer exhaust the RMT channels or the PARLIO unit. A strip no longer clears a pin that another peripheral now owns when it is freed.
+- Fixed: `LiteLEDpio::getActiveInstanceCount()` always returned 0. It now counts valid `LiteLEDpio` strips and `LiteLEDpioGroup` groups.
 
 **v3.3.0**
 - Added the `LED_STRIP_WS281XV7` LED type for the WorldSemi WS281x family, using the timing from the WS2812B V7 data sheet. Works with `LiteLED`, `LiteLEDpio` and `LiteLEDpioGroup`.
